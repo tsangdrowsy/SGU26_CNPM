@@ -188,7 +188,7 @@ export default function MapScreen() {
                 onPress={() => simulate(poi.latitude, poi.longitude)}
               >
                 <Text style={styles.simChipText}>
-                  {poi.name.split(" ")[0]}
+                 {poi.name.split(" (")[0]}
                 </Text>
               </TouchableOpacity>
             ))}

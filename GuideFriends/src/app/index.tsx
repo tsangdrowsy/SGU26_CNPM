@@ -1,98 +1,198 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// src/app/index.tsx
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { router } from "expo-router";
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import PrimaryButton from "../components/PrimaryButton";
+import { colors } from "../theme/colors";
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+const features = [
+  {
+    id: "map",
+    icon: "🗺️",
+    title: "Interactive Map",
+    description: "Explore Linh Ung Pagoda easily",
+  },
+  {
+    id: "audio",
+    icon: "🎧",
+    title: "Automatic Audio Guide",
+    description: "Audio plays when you arrive near a POI",
+  },
+  {
+    id: "ai",
+    icon: "💬",
+    title: "AI Assistant",
+    description: "Ask questions about the pagoda",
+  },
+];
+
+export default function IndexScreen() {
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>Linh Ung Pagoda</Text>
+          </View>
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+          <View style={styles.heroCircle}>
+            <Text style={styles.heroIcon}>🛕</Text>
+          </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+          <Text style={styles.title}>Linh Ung Guide</Text>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+          <Text style={styles.subtitle}>
+            Discover Linh Ung Pagoda with an automatic audio guide,
+            interactive map, and AI assistant.
+          </Text>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+          <View style={styles.featureList}>
+            {features.map((feature) => (
+              <View key={feature.id} style={styles.featureCard}>
+                <View style={styles.featureIconBox}>
+                  <Text style={styles.featureIcon}>{feature.icon}</Text>
+                </View>
+
+                <View style={styles.featureTextBox}>
+                  <Text style={styles.featureTitle}>{feature.title}</Text>
+                  <Text style={styles.featureDescription}>
+                    {feature.description}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.ctaWrap}>
+            <PrimaryButton
+              title="Get Started"
+              onPress={() => router.push("/language")}
+            />
+          </View>
+
+          <Text style={styles.helperText}>
+            You will need an activation code from the counter.
+          </Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    backgroundColor: colors.background,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  scrollContent: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    paddingBottom: 48,
+  },
+  container: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "center",
+  },
+  badge: {
+    backgroundColor: colors.softAccent,
+    borderColor: colors.orangeBorder,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  badgeText: {
+    color: colors.accentDark,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  heroCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 32,
+  },
+  heroIcon: {
+    fontSize: 52,
   },
   title: {
-    textAlign: 'center',
+    marginTop: 24,
+    fontSize: 32,
+    fontWeight: "800",
+    color: colors.textPrimary,
+    textAlign: "center",
   },
-  code: {
-    textTransform: 'uppercase',
+  subtitle: {
+    marginTop: 10,
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: 8,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  featureList: {
+    width: "100%",
+    marginTop: 32,
+    gap: 16,
+  },
+  featureCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.orangeBorder,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    gap: 16,
+  },
+  featureIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.softAccent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featureIcon: {
+    fontSize: 22,
+  },
+  featureTextBox: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  featureDescription: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+  },
+  ctaWrap: {
+    width: "100%",
+    marginTop: 32,
+  },
+  helperText: {
+    marginTop: 16,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: "center",
   },
 });

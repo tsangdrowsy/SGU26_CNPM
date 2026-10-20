@@ -1,9 +1,137 @@
 // src/features/map/MapCanvas.web.tsx
+import { useEffect, useMemo, useRef } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { POI } from "../../types/poi";
+import { UserLocation } from "./types";
 
-import { useEffect, useRef } from "react";
-import { View } from "react-native";
-import L from "leaflet";
-import { MapCanvasProps } from "./types";
+type MapCanvasProps = {
+  pois: POI[];
+  center: { latitude: number; longitude: number };
+  userLocation: UserLocation | null;
+  onReady: () => void;
+  onPoiSelected: (poi: POI) => void;
+  onMapTap: () => void;
+};
+
+function buildHtml(
+  pois: POI[],
+  center: { latitude: number; longitude: number }
+): string {
+  const poisPayload = pois.map((p) => ({
+    id: p.id,
+    name: p.name,
+    latitude: p.location.latitude,
+    longitude: p.location.longitude,
+    radiusMeters: p.radiusMeters,
+  }));
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
+    #map { touch-action: none; }
+    body { -webkit-tap-highlight-color: transparent; font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var POIS = ${JSON.stringify(poisPayload)};
+    var CENTER = ${JSON.stringify(center)};
+
+    // Send messages back to the React parent (web bridge)
+    function send(msg) {
+      try {
+        window.parent.postMessage(JSON.stringify(msg), "*");
+      } catch (e) {}
+    }
+
+    var map = L.map("map", { zoomControl: false }).setView(
+      [CENTER.latitude, CENTER.longitude], 17
+    );
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    POIS.forEach(function (p) {
+      L.circle([p.latitude, p.longitude], {
+        radius: p.radiusMeters,
+        color: "#F97316",
+        weight: 1,
+        opacity: 0.6,
+        fillColor: "#F97316",
+        fillOpacity: 0.12
+      }).addTo(map);
+
+      var m = L.circleMarker([p.latitude, p.longitude], {
+        radius: 9,
+        color: "#FFFFFF",
+        weight: 2,
+        fillColor: "#F97316",
+        fillOpacity: 1
+      }).addTo(map);
+
+      m.bindTooltip(p.name, { direction: "top", offset: [0, -8] });
+      m.on("click", function () { send({ type: "poiSelected", id: p.id }); });
+    });
+
+    map.on("click", function () { send({ type: "mapTap" }); });
+
+    var userMarker = null;
+    var gotUser = false;
+
+    window.__setUser = function (lat, lng, acc) {
+      if (!userMarker) {
+        userMarker = L.circleMarker([lat, lng], {
+          radius: 8,
+          color: "#FFFFFF",
+          weight: 3,
+          fillColor: "#2563EB",
+          fillOpacity: 1
+        }).addTo(map);
+      } else {
+        userMarker.setLatLng([lat, lng]);
+      }
+      if (!gotUser) {
+        gotUser = true;
+        map.setView([lat, lng], 17);
+      }
+    };
+
+    window.__zoom = function (dir) {
+      if (dir > 0) { map.zoomIn(); } else { map.zoomOut(); }
+    };
+
+    // Receive commands from the React parent
+    window.addEventListener("message", function (event) {
+      try {
+        var data = JSON.parse(event.data);
+        if (data.type === "setUser") {
+          window.__setUser(data.lat, data.lng, data.acc);
+        } else if (data.type === "zoom") {
+          window.__zoom(data.dir);
+        }
+      } catch (e) {}
+    });
+
+    // Notify parent that the map is ready
+    function sendReady() { send({ type: "ready" }); }
+    if (document.readyState === "complete") { sendReady(); }
+    else { window.addEventListener("load", sendReady); }
+    setTimeout(sendReady, 600);
+  </script>
+</body>
+</html>
+`;
+}
 
 export default function MapCanvas({
   pois,
@@ -13,97 +141,124 @@ export default function MapCanvas({
   onPoiSelected,
   onMapTap,
 }: MapCanvasProps) {
-  const containerRef = useRef<any>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const userMarkerRef = useRef<L.CircleMarker | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const latestUserRef = useRef<UserLocation | null>(userLocation);
+  latestUserRef.current = userLocation; // always current for the "ready" handler
 
-  const cbRef = useRef({ onReady, onPoiSelected, onMapTap });
-  cbRef.current = { onReady, onPoiSelected, onMapTap };
+  const html = useMemo(() => buildHtml(pois, center), [pois, center]);
 
-  // Inject Leaflet CSS at runtime (safe on web)
+  // Listen for events coming from the iframe
   useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    if (!document.getElementById("leaflet-css")) {
-      const link = document.createElement("link");
-      link.id = "leaflet-css";
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
-
-    const map = L.map(containerRef.current).setView(
-      [center.latitude, center.longitude],
-      17
-    );
-
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
-
-    pois.forEach((poi) => {
-      L.circle([poi.latitude, poi.longitude], {
-        radius: poi.radiusMeters || 20,
-        color: "#f97316",
-        fillColor: "#f97316",
-        fillOpacity: 0.1,
-        weight: 1,
-      }).addTo(map);
-
-      L.circleMarker([poi.latitude, poi.longitude], {
-        radius: 9,
-        color: "#f97316",
-        fillColor: "#f97316",
-        fillOpacity: 0.9,
-        weight: 2,
-      })
-        .on("click", () => cbRef.current.onPoiSelected?.(poi))
-        .addTo(map);
-    });
-
-    map.on("click", () => cbRef.current.onMapTap?.());
-
-    mapRef.current = map;
-
-    setTimeout(() => map.invalidateSize(), 0);
-
-    map.whenReady(() => cbRef.current.onReady?.());
-
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      userMarkerRef.current = null;
+    const handler = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "ready") {
+          onReady();
+          // If we already have a fix, push it in now that the iframe is live
+          const cur = latestUserRef.current;
+          if (cur && iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage(
+              JSON.stringify({
+                type: "setUser",
+                lat: cur.latitude,
+                lng: cur.longitude,
+                acc: cur.accuracy ?? 15,
+              }),
+              "*"
+            );
+          }
+        } else if (data.type === "poiSelected") {
+          const poi = pois.find((p) => p.id === data.id);
+          if (poi) onPoiSelected(poi);
+        } else if (data.type === "mapTap") {
+          onMapTap();
+        }
+      } catch {
+        // ignore non-JSON messages
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [pois, onReady, onPoiSelected, onMapTap]);
 
+  // Push GPS updates into the iframe
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !userLocation) return;
-
-    const latlng: [number, number] = [
-      userLocation.latitude,
-      userLocation.longitude,
-    ];
-
-    if (!userMarkerRef.current) {
-      userMarkerRef.current = L.circleMarker(latlng, {
-        radius: 7,
-        color: "#2563eb",
-        fillColor: "#2563eb",
-        fillOpacity: 1,
-        weight: 2,
-      }).addTo(map);
-    } else {
-      userMarkerRef.current.setLatLng(latlng);
-    }
+    if (!userLocation || !iframeRef.current?.contentWindow) return;
+    iframeRef.current.contentWindow.postMessage(
+      JSON.stringify({
+        type: "setUser",
+        lat: userLocation.latitude,
+        lng: userLocation.longitude,
+        acc: userLocation.accuracy ?? 15,
+      }),
+      "*"
+    );
   }, [userLocation]);
 
-  // On react-native-web, View ref = real DOM node
-  return <View ref={containerRef} style={{ flex: 1, minHeight: 400 }} />;
+  const zoomBy = (dir: 1 | -1) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ type: "zoom", dir }),
+      "*"
+    );
+  };
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <iframe
+        ref={iframeRef}
+        srcDoc={html}
+        style={{
+          border: "none",
+          width: "100%",
+          height: "100%",
+          display: "block",
+        }}
+        title="Leaflet Map"
+      />
+
+      {/* Native zoom buttons (same as the native component) */}
+      <View style={styles.zoomWrap}>
+        <TouchableOpacity
+          style={styles.zoomBtn}
+          onPress={() => zoomBy(1)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.zoomBtnText}>+</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.zoomBtn}
+          onPress={() => zoomBy(-1)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.zoomBtnText}>−</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  zoomWrap: {
+    position: "absolute",
+    right: 12,
+    top: "38%",
+    gap: 8,
+    zIndex: 10,
+  },
+  zoomBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+  },
+  zoomBtnText: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#374151",
+  },
+});

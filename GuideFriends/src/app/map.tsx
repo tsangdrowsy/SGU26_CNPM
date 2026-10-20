@@ -1,27 +1,38 @@
 // src/app/map.tsx
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { MAP_CENTER, MOCK_POIS, POI } from "../data/mockPois";
+import { MAP_CENTER } from "../data/mockPois";
+import { fetchPois } from "../api/pois";
+import { LanguageCode, POI } from "../types/poi";
 import { colors } from "../theme/colors";
 import { getDistanceMeters } from "../features/map/geo";
 import MapCanvas from "../features/map/MapCanvas";
 import { UserLocation } from "../features/map/types";
+import { translatePoi } from "../services/translationService";
+import { speak, stopSpeaking } from "../services/ttsService";
 
 export default function MapScreen() {
+  const insets = useSafeAreaInsets();
   const locationSubscription = useRef<any>(null);
   const simModeRef = useRef(false);
+  const visitedRef = useRef<Set<string>>(new Set());
+  const [pois, setPois] = useState<POI[]>([]);
+  const [poisLoading, setPoisLoading] = useState(true);
+  const [poisError, setPoisError] = useState<string | null>(null);
 
   const [mapReady, setMapReady] = useState(false);
   const [simMode, setSimMode] = useState(false);
@@ -32,74 +43,208 @@ export default function MapScreen() {
   const [userCoords, setUserCoords] = useState<UserLocation | null>(null);
   const [nearbyPoi, setNearbyPoi] = useState<POI | null>(null);
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
+  const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
-  simModeRef.current = simMode;
+  const [ttsState, setTtsState] = useState<"idle" | "preparing" | "speaking">(
+    "idle"
+  );
+  const [currentLanguage, setCurrentLanguage] = useState<LanguageCode>("en");
 
-  // ===== Real GPS (works on native AND web browser geolocation) =====
+  // Keep ref in sync with state
   useEffect(() => {
-    let isMounted = true;
+    simModeRef.current = simMode;
+  }, [simMode]);
 
-    const startLocation = async () => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
       try {
-        setLocationStatus("requesting");
-
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (!isMounted) return;
-
-        if (status !== "granted") {
-          setLocationStatus("denied");
-          return;
-        }
-
-        setLocationStatus("active");
-
-        locationSubscription.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, distanceInterval: 5 },
-          (position) => {
-            if (simModeRef.current) return; // simulator overrides GPS
-
-            setUserCoords({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy ?? 15,
-            });
-          }
-        );
-      } catch (error) {
-        console.log("Location error:", error);
-        setLocationStatus("denied");
+        setPoisLoading(true);
+        setPoisError(null);
+        const data = await fetchPois();
+        if (!cancelled) setPois(data);
+      } catch (e: any) {
+        if (!cancelled) setPoisError(e?.message ?? "Failed to load POIs");
+      } finally {
+        if (!cancelled) setPoisLoading(false);
       }
-    };
-
-    startLocation();
-
+    })();
     return () => {
-      isMounted = false;
-      locationSubscription.current?.remove();
+      cancelled = true;
     };
   }, []);
 
-  // ===== Geofencing (PRD Flow 2, step 1-2) =====
+  // Load saved language
   useEffect(() => {
-    if (!userCoords) return;
+    AsyncStorage.getItem("app_language").then((saved) => {
+      if (saved) setCurrentLanguage(saved as LanguageCode);
+    });
+  }, []);
 
-    const found = MOCK_POIS.find(
+  // Fallback "map ready" timer
+  useEffect(() => {
+    const t = setTimeout(() => setMapReady(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const startLocation = useCallback(async () => {
+    try {
+      setLocationStatus("requesting");
+
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        ({ status } = await Location.requestForegroundPermissionsAsync());
+      }
+      if (status !== "granted") {
+        setLocationStatus("denied");
+        return;
+      }
+
+      setLocationStatus("active");
+
+      try {
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 60_000 });
+        if (last && !simModeRef.current) {
+          setUserCoords({
+            latitude: last.coords.latitude,
+            longitude: last.coords.longitude,
+            accuracy: last.coords.accuracy ?? 15,
+          });
+        }
+      } catch {}
+
+      try {
+        const fresh = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        if (!simModeRef.current) {
+          setUserCoords({
+            latitude: fresh.coords.latitude,
+            longitude: fresh.coords.longitude,
+            accuracy: fresh.coords.accuracy ?? 15,
+          });
+        }
+      } catch (e) {
+        console.log("getCurrentPositionAsync failed:", e);
+      }
+
+      locationSubscription.current?.remove?.();
+      locationSubscription.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 2,
+          timeInterval: 2000,
+        },
+        (position) => {
+          if (simModeRef.current) return;
+          setUserCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy ?? 15,
+          });
+        }
+      );
+    } catch (e) {
+      console.log("Location error:", e);
+      setLocationStatus("denied");
+    }
+  }, []);
+
+  useEffect(() => {
+    startLocation();
+    return () => {
+      locationSubscription.current?.remove?.();
+      locationSubscription.current = null;
+    };
+  }, [startLocation]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && !simModeRef.current && locationStatus === "active") {
+        startLocation();
+      }
+    });
+    return () => sub.remove();
+  }, [startLocation, locationStatus]);
+
+  const markVisited = useCallback((id: string) => {
+    if (visitedRef.current.has(id)) return;
+    visitedRef.current.add(id);
+    setVisitedIds(Array.from(visitedRef.current));
+  }, []);
+
+  const triggerTTS = useCallback(
+    async (poi: POI) => {
+      await stopSpeaking();
+      setTtsState("preparing");
+
+      try {
+        const text = await translatePoi(poi.id, poi.shortDescriptionVi, currentLanguage);
+        setTtsState("speaking");
+        await speak(text, currentLanguage);
+        setTtsState("idle");
+      } catch (error) {
+        console.log("TTS error:", error);
+        setTtsState("idle");
+      }
+    },
+    [currentLanguage]
+  );
+
+  useEffect(() => {
+    if (!userCoords || pois.length === 0) return;
+
+    const found = pois.find(
       (poi) =>
         getDistanceMeters(
           userCoords.latitude,
           userCoords.longitude,
-          poi.latitude,
-          poi.longitude
+          poi.location.latitude,
+          poi.location.longitude
         ) <=
         poi.radiusMeters + 5
     );
 
     setNearbyPoi(found ?? null);
-  }, [userCoords]);
+
+    if (found && !visitedRef.current.has(found.id)) {
+      markVisited(found.id);
+      triggerTTS(found);
+    }
+  }, [userCoords, pois, triggerTTS, markVisited]);
 
   const simulate = useCallback((latitude: number, longitude: number) => {
+    simModeRef.current = true;
     setSimMode(true);
     setUserCoords({ latitude, longitude, accuracy: 5 });
+  }, []);
+
+  const resumeRealGps = useCallback(async () => {
+    simModeRef.current = false;
+    setSimMode(false);
+
+    try {
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        ({ status } = await Location.requestForegroundPermissionsAsync());
+      }
+      if (status !== "granted") {
+        setLocationStatus("denied");
+        return;
+      }
+
+      setLocationStatus("active");
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      setUserCoords({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy ?? 15,
+      });
+    } catch (e) {
+      console.log("Real GPS fix failed:", e);
+    }
   }, []);
 
   const displayPoi = selectedPoi ?? nearbyPoi;
@@ -110,34 +255,41 @@ export default function MapScreen() {
           getDistanceMeters(
             userCoords.latitude,
             userCoords.longitude,
-            displayPoi.latitude,
-            displayPoi.longitude
+            displayPoi.location.latitude,
+            displayPoi.location.longitude
           )
         )
       : null;
 
+  const isVisited = displayPoi ? visitedIds.includes(displayPoi.id) : false;
+
   const handleListen = () => {
-    Alert.alert(
-      "Audio Guide",
-      "Next step (PRD Flow 2): 'Đang chuẩn bị thuyết minh...' -> POST /api/ai/translate -> expo-speech.speak()"
-    );
+    if (!displayPoi) return;
+    if (ttsState === "speaking") {
+      stopSpeaking();
+      setTtsState("idle");
+    } else {
+      triggerTTS(displayPoi);
+    }
   };
 
-  const handleDetails = () => {
+  const handleDetails = () =>
     Alert.alert("POI Detail", "Next step: POI detail screen.");
-  };
 
   const handleChat = () => {
-    Alert.alert("AI Chatbot", "Next step (PRD Flow 3): RAG chat with POI context.");
+    if (!displayPoi) return;
+    router.push({
+      pathname: "/chat",
+      params: { poiId: displayPoi.id, lang: currentLanguage },
+    });
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <View style={styles.container}>
-        {/* ===== OpenStreetMap canvas (native: WebView / web: Leaflet DOM) ===== */}
         <MapCanvas
-          pois={MOCK_POIS}
-          center={MAP_CENTER}
+          pois={pois}
+          center={userCoords ?? MAP_CENTER}
           userLocation={userCoords}
           onReady={() => setMapReady(true)}
           onPoiSelected={(poi) => setSelectedPoi(poi)}
@@ -145,20 +297,52 @@ export default function MapScreen() {
         />
 
         {!mapReady && (
-          <View style={styles.overlay}>
-            <ActivityIndicator color={colors.accent} size="large" />
-            <Text style={styles.overlayText}>Loading OpenStreetMap...</Text>
+          <View style={styles.overlay} pointerEvents="none">
+            <View style={styles.overlayPill}>
+              <ActivityIndicator color={colors.accent} size="small" />
+              <Text style={styles.overlayText}>Loading OpenStreetMap...</Text>
+            </View>
           </View>
         )}
 
-        {/* ===== Top controls ===== */}
-        <View style={styles.header}>
+        {poisLoading && (
+          <View style={styles.overlay}>
+            <View style={styles.overlayPill}>
+              <ActivityIndicator color={colors.accent} size="small" />
+              <Text style={styles.overlayText}>Loading POIs from database…</Text>
+            </View>
+          </View>
+        )}
+
+        {!poisLoading && poisError && (
+          <View style={[styles.deniedBanner, { top: insets.top + 60 }]}>
+            <Text style={styles.deniedText}>POI load failed: {poisError}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setPoisLoading(true);
+                fetchPois()
+                  .then(setPois)
+                  .catch((e) => setPoisError(e.message))
+                  .finally(() => setPoisLoading(false));
+              }}
+              style={styles.deniedAction}
+            >
+              <Text style={styles.deniedActionText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Top controls: Gộp nút Thoát và Trạng thái GPS */}
+        <View style={[styles.header, { top: insets.top + 8 }]}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={async () => {
+              await AsyncStorage.removeItem("access_token");
+              router.replace("/"); 
+            }}
             style={styles.headerPill}
             activeOpacity={0.85}
           >
-            <Text style={styles.headerPillText}>Back</Text>
+            <Text style={styles.headerPillText}>Thoát</Text>
           </TouchableOpacity>
 
           <View style={styles.headerPill}>
@@ -166,78 +350,92 @@ export default function MapScreen() {
               {simMode
                 ? "Simulated GPS"
                 : locationStatus === "active"
-                ? "GPS Active"
-                : locationStatus === "denied"
-                ? "GPS Denied"
-                : "Waiting for GPS..."}
+                  ? "GPS Active"
+                  : locationStatus === "denied"
+                    ? "GPS Denied"
+                    : "Waiting for GPS..."}
             </Text>
           </View>
         </View>
 
-        {/* ===== GPS simulator (demo on PC / emulator) ===== */}
-        <View style={styles.simBar}>
+        {/* TTS pill */}
+        {ttsState === "preparing" && (
+          <View style={[styles.ttsOverlay, { top: insets.top + 64 }]}>
+            <ActivityIndicator color="#FFFFFF" size="small" />
+            <Text style={styles.ttsOverlayText}>Đang chuẩn bị thuyết minh...</Text>
+          </View>
+        )}
+
+        {ttsState === "speaking" && (
+          <View style={[styles.ttsOverlay, { top: insets.top + 64 }]}>
+            <Text style={styles.ttsOverlayText}>🔊 Speaking...</Text>
+          </View>
+        )}
+
+        {/* Denied banner */}
+        {locationStatus === "denied" && !simMode && (
+          <View style={[styles.deniedBanner, { top: insets.top + 60 }]}>
+            <Text style={styles.deniedText}>
+              Location denied. Use the simulator chips below, or enable it in Settings.
+            </Text>
+            <TouchableOpacity
+              onPress={() => Linking.openSettings()}
+              activeOpacity={0.85}
+              style={styles.deniedAction}
+            >
+              <Text style={styles.deniedActionText}>Open Settings</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Bottom stack */}
+        <View style={[styles.bottomStack, { bottom: insets.bottom + 12 }]}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.simBarContent}
           >
-            {MOCK_POIS.map((poi) => (
+            {pois.map((poi) => (
               <TouchableOpacity
                 key={poi.id}
                 style={styles.simChip}
-                onPress={() => simulate(poi.latitude, poi.longitude)}
+                onPress={() => simulate(poi.location.latitude, poi.location.longitude)}
               >
-                <Text style={styles.simChipText}>
-                 {poi.name.split(" (")[0]}
-                </Text>
+                <Text style={styles.simChipText}>{poi.name.split(" (")[0]}</Text>
               </TouchableOpacity>
             ))}
 
             <TouchableOpacity
               style={[styles.simChip, !simMode && styles.simChipActive]}
-              onPress={() => setSimMode(false)}
+              onPress={resumeRealGps}
             >
               <Text style={styles.simChipText}>Real GPS</Text>
             </TouchableOpacity>
           </ScrollView>
-        </View>
 
-        {locationStatus === "denied" && !simMode && (
-          <View style={styles.deniedBanner}>
-            <Text style={styles.deniedText}>
-              Location denied. Use the simulator chips above to demo geofencing.
-            </Text>
-          </View>
-        )}
-
-        {/* ===== Bottom POI card ===== */}
-        <View style={styles.bottomCardWrap}>
           {displayPoi ? (
             <View style={styles.card}>
               <View style={styles.cardTitleRow}>
                 <Text style={styles.cardTitle}>{displayPoi.name}</Text>
-
                 <View
                   style={[
                     styles.badge,
-                    selectedPoi ? styles.badgeOrange : styles.badgeGreen,
+                    isVisited ? styles.badgeGreen : styles.badgeOrange,
                   ]}
                 >
                   <Text
                     style={[
                       styles.badgeText,
-                      selectedPoi
-                        ? styles.badgeTextOrange
-                        : styles.badgeTextGreen,
+                      isVisited ? styles.badgeTextGreen : styles.badgeTextOrange,
                     ]}
                   >
-                    {selectedPoi ? "Selected" : "Nearby"}
+                    {isVisited ? "Visited" : selectedPoi ? "Selected" : "Nearby"}
                   </Text>
                 </View>
               </View>
 
               <Text style={styles.cardDescription}>
-                {displayPoi.shortDescription}
+                {displayPoi.shortDescriptionVi}
               </Text>
 
               {distance !== null && (
@@ -248,9 +446,16 @@ export default function MapScreen() {
                 <TouchableOpacity
                   style={[styles.actionButton, styles.actionPrimary]}
                   onPress={handleListen}
+                  disabled={ttsState === "preparing"}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.actionPrimaryText}>Listen</Text>
+                  <Text style={styles.actionPrimaryText}>
+                    {ttsState === "speaking"
+                      ? "Stop"
+                      : ttsState === "preparing"
+                        ? "Preparing..."
+                        : "Listen"}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -274,14 +479,13 @@ export default function MapScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Linh Ung Pagoda Map</Text>
               <Text style={styles.cardDescription}>
-                Tap a POI marker, or use the simulator chips to trigger the
-                20m geofence.
+                Tap a POI marker, or use the simulator chips to trigger the 20m geofence.
               </Text>
             </View>
           )}
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -289,25 +493,41 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
 
-   overlay: {
+  overlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 30,
   },
-  overlayText: {
-    marginTop: 12,
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textSecondary,
-    textAlign: "center",
+  overlayPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(17, 24, 39, 0.85)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 999,
+    elevation: 6,
   },
+  overlayText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
+
+  ttsOverlay: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.9)",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    gap: 10,
+    zIndex: 50,
+  },
+  ttsOverlayText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
 
   header: {
     position: "absolute",
-    top: 8,
     left: 16,
     right: 16,
     zIndex: 20,
@@ -322,39 +542,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 8,
+    elevation: 4,
   },
   headerPillText: { fontSize: 14, fontWeight: "700", color: colors.accentDark },
   headerPillTextSmall: { fontSize: 12, fontWeight: "700", color: "#374151" },
 
-  simBar: {
-    position: "absolute",
-    top: 52,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-  },
-  simBarContent: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  simChip: {
-    backgroundColor: colors.surface,
-    borderColor: colors.orangeBorder,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-  },
-  simChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.softAccent,
-  },
-  simChipText: { fontSize: 12, fontWeight: "700", color: colors.accentDark },
-
   deniedBanner: {
     position: "absolute",
-    top: 92,
     left: 16,
     right: 16,
     zIndex: 20,
@@ -363,16 +557,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 12,
+    gap: 8,
   },
   deniedText: { fontSize: 13, fontWeight: "600", color: "#DC2626" },
+  deniedAction: {
+    alignSelf: "flex-start",
+    backgroundColor: "#DC2626",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  deniedActionText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
 
-  bottomCardWrap: {
+  bottomStack: {
     position: "absolute",
-    bottom: 24,
     left: 16,
     right: 16,
     zIndex: 20,
+    gap: 10,
   },
+  simBarContent: { gap: 8 },
+  simChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.orangeBorder,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    elevation: 3,
+  },
+  simChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.softAccent,
+  },
+  simChipText: { fontSize: 12, fontWeight: "700", color: colors.accentDark },
+
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.orangeBorder,

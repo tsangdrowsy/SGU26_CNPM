@@ -1,67 +1,38 @@
 // src/data/mockPois.ts
-
-export interface POI {
-  id: string;
-  name: string;
-  shortDescription: string;
-  fullDescription?: string;
-  latitude: number;
-  longitude: number;
-  radiusMeters: number;
-}
-
-// =====================================================
-// TEST WORLD: Saigon University (dense OSM coverage)
-// Real target (swap back for final demo if needed):
-//   Linh Ung Pagoda, Son Tra, Da Nang
-//   { latitude: 16.12345, longitude: 108.23456 }
-// =====================================================
+import { POI } from "../types/poi";
 
 export const MAP_CENTER = {
-  latitude: 10.75247,
-  longitude: 106.6651,
+  latitude: 10.75968,
+  longitude: 106.68214,
 };
 
-export const MOCK_POIS: POI[] = [
-  {
-    id: "poi_001",
-    name: "Cổng Chính (Main Gate)",
-    shortDescription:
-      "Cổng chính trường Đại học Sài Gòn, mặt tiền An Dương Vương.",
-    fullDescription:
-      "Cổng chính là điểm đón tiếp sinh viên và khách tham quan. Từ đây có thể nhìn thấy tòa hiệu bộ và quảng trường trung tâm.",
-    latitude: 10.75205,
-    longitude: 106.6651,
-    radiusMeters: 20,
-  },
-  {
-    id: "poi_002",
-    name: "Thư Viện (Library)",
-    shortDescription: "Thư viện trung tâm với không gian học tập yên tĩnh.",
-    fullDescription:
-      "Thư viện Đại học Sài Gòn gồm nhiều tầng, lưu trữ hàng chục nghìn đầu sách và khu tự học mở cửa đến tối.",
-    latitude: 10.75265,
-    longitude: 106.66475,
-    radiusMeters: 20,
-  },
-  {
-    id: "poi_003",
-    name: "Căn Tin (Canteen)",
-    shortDescription: "Khu ẩm thực sôi động nhất khuôn viên trường.",
-    fullDescription:
-      "Căn tin phục vụ cơm, bún, cà phê với giá sinh viên. Giờ cao điểm từ 11h đến 13h mỗi ngày.",
-    latitude: 10.7527,
-    longitude: 106.6656,
-    radiusMeters: 20,
-  },
-  {
-    id: "poi_004",
-    name: "Giảng Đường A (Lecture Hall A)",
-    shortDescription: "Tòa giảng đường lớn nhất của trường.",
-    fullDescription:
-      "Giảng đường A gồm hơn 40 phòng học và hội trường lớn, nơi diễn ra các sự kiện học thuật quan trọng.",
-    latitude: 10.7532,
-    longitude: 106.6652,
-    radiusMeters: 20,
-  },
-];
+
+// export const MOCK_POIS: POI[] = [
+//   {
+//     id: "poi_001",
+//     name: "Chùa Linh Ứng (Bãi Bụt)",
+//     shortDescriptionVi: "Ngôi chùa nổi tiếng với tượng Quán Thế Âm cao nhất Việt Nam.",
+//     fullDescriptionVi: "Chùa Linh Ứng tọa lạc trên bán đảo Sơn Trà...",
+//     location: { latitude: 16.12345, longitude: 108.23456 },
+//     radiusMeters: 30,
+//     shopkeepers: [
+//       { id: "shop_001", name: "Quán Chay Sơn Trà", descriptionVi: "Món chay thanh đạm.", openingHours: "08:00 - 21:00" }
+//     ]
+//   },
+//   {
+//     id: "poi_002",
+//     name: "Tượng Quán Thế Âm",
+//     shortDescriptionVi: "Tượng Phật bà Quán Âm cao 67m, tương đương tòa nhà 30 tầng.",
+//     fullDescriptionVi: "Tượng Quán Thế Âm tại chùa Linh Ứng được xem là cao nhất Việt Nam...",
+//     location: { latitude: 16.12385, longitude: 108.23490 },
+//     radiusMeters: 20,
+//   },
+//   {
+//     id: "poi_003",
+//     name: "Cổng Tam Quan",
+//     shortDescriptionVi: "Cổng vào chính của chùa với kiến trúc truyền thống.",
+//     fullDescriptionVi: "Cổng Tam Quan là nơi đón tiếp du khách...",
+//     location: { latitude: 16.12305, longitude: 108.23410 },
+//     radiusMeters: 15,
+//   },
+// ];

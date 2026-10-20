@@ -1,0 +1,20 @@
+{
+  "name": "guide-friends-api",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "msnodesqlv8": "^5.6.0",
+    "mssql": "^11.0.1",
+    "multer": "^2.4.0",
+    "vnpay": "^2.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

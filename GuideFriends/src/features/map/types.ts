@@ -1,6 +1,7 @@
 // src/features/map/types.ts
 
-import { POI } from "../../data/mockPois";
+// Fix: Import POI từ đúng file types, không phải từ file mock data
+import { POI } from "../../types/poi";
 
 export interface UserLocation {
   latitude: number;

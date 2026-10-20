@@ -1,5 +1,5 @@
 // src/app/index.tsx
-
+import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import {
   SafeAreaView,
@@ -7,7 +7,9 @@ import {
   StyleSheet,
   Text,
   View,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import PrimaryButton from "../components/PrimaryButton";
 import { colors } from "../theme/colors";
 
@@ -33,6 +35,28 @@ const features = [
 ];
 
 export default function IndexScreen() {
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem("access_token").then((token) => {
+      if (token) {
+        // Đã có token -> vào thẳng Map
+        router.replace("/map");
+      } else {
+        // Chưa có -> hiện màn hình Welcome
+        setChecking(false);
+      }
+    });
+  }, []);
+
+  if (checking) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -51,8 +75,8 @@ export default function IndexScreen() {
           <Text style={styles.title}>Linh Ung Guide</Text>
 
           <Text style={styles.subtitle}>
-            Discover Linh Ung Pagoda with an automatic audio guide,
-            interactive map, and AI assistant.
+            Discover Linh Ung Pagoda with an automatic audio guide, interactive
+            map, and AI assistant.
           </Text>
 
           <View style={styles.featureList}>
@@ -89,6 +113,12 @@ export default function IndexScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

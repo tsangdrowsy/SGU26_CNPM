@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { router } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import PrimaryButton from "../components/PrimaryButton";
 import { colors } from "../theme/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const languages = [
   { code: "vi", label: "Tiếng Việt" },
@@ -24,7 +25,8 @@ const languages = [
 export default function LanguageScreen() {
   const [selectedLanguage, setSelectedLanguage] = useState("en");
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    await AsyncStorage.setItem("app_language", selectedLanguage);
     router.push("/unlock");
   };
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { PlusCircle, Image as ImageIcon, MapPin, Edit } from "lucide-react"; // 👈 Đã thêm Edit
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "";
 
 export default function AdminPage() {
     const [stats, setStats] = useState({ totalTokens: 0, activeTokens: 0, totalPois: 0 });

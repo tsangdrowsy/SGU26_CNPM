@@ -39,6 +39,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
+app.use(express.static(path.join(process.cwd(), "public")));
 
 // ---------- CẤU HÌNH DATABASE ----------
 const pool = new sql.ConnectionPool({
@@ -461,7 +462,10 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+//host web
+app.get('*', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+});
 // ---------- START SERVER ----------
 app.listen(process.env.PORT ?? 3000, async () => {
   console.log(`[api] listening on http://0.0.0.0:${process.env.PORT ?? 3000}`);

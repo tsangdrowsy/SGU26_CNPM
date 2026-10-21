@@ -174,3 +174,8 @@ BEGIN
     END
 END
 GO
+USE GuideFriendsDB;
+GO
+UPDATE Admins 
+SET PasswordHash = '$2b$10$0DgiUhK4vhuo49Va8YXqp.d6e3EluNtgku/bMjRJ19nU8toToTikO' -- 👈 Dán chuỗi vừa copy ở đây
+WHERE Username = 'admin';

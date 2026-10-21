@@ -1,6 +1,13 @@
-import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import ClerkPage from "./pages/ClerkPage";
 import AdminPage from "./pages/AdminPage";
+import AdminLogin from "./pages/AdminLogin";
+
+const ProtectedRoute = () => {
+  const isAuthenticated = localStorage.getItem("admin_token");
+   console.log("Check auth:", isAuthenticated);
+  return isAuthenticated ? <Outlet /> : <Navigate to="/admin/login" replace />;
+};
 
 function App() {
   return (
@@ -15,12 +22,15 @@ function App() {
         <Routes>
           {/* Nếu vào trang chủ, tự động chuyển hướng sang Clerk */}
           <Route path="/" element={<Navigate to="/clerk" replace />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
           
           {/* Domain cho Clerk */}
           <Route path="/clerk" element={<ClerkPage />} />
           
-          {/* Domain cho Admin */}
-          <Route path="/admin" element={<AdminPage />} />
+          {/* Route cho Admin */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/admin" element={<AdminPage />} />
+          </Route>
         </Routes>
       </div>
     </BrowserRouter>

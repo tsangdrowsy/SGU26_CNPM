@@ -1,14 +1,23 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { PlusCircle, Image as ImageIcon, MapPin, Edit } from "lucide-react"; // 👈 Đã thêm Edit
+import { PlusCircle, Image as ImageIcon, MapPin, Edit, LogOut } from "lucide-react";// 👈 Đã thêm Edit
 
 const API_BASE = "http://localhost:3000";
 
 export default function AdminPage() {
+    const navigate = useNavigate();
+    const adminName = localStorage.getItem("admin_name") || "Admin";
     const [stats, setStats] = useState({ totalTokens: 0, activeTokens: 0, totalPois: 0 });
     const [tokens, setTokens] = useState([]);
     const [pois, setPois] = useState([]);
     const [loading, setLoading] = useState(false);
+
+     const handleLogout = () => {
+        localStorage.removeItem("admin_token");
+        localStorage.removeItem("admin_name");
+        navigate("/admin/login");
+    };
 
     // State cho Form
     const [editingId, setEditingId] = useState(null); // 👈 Đã dời lên đây
@@ -86,8 +95,16 @@ export default function AdminPage() {
 
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8">
-            <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-
+            {/* Thêm Header có nút Đăng xuất */}
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
+                <div className="flex items-center gap-4">
+                    <span className="text-gray-500">Xin chào, <b>{adminName}</b></span>
+                    <button onClick={handleLogout} className="flex items-center gap-2 bg-red-50 text-red-500 px-4 py-2 rounded-lg hover:bg-red-100 transition font-medium">
+                        <LogOut size={16} /> Đăng xuất
+                    </button>
+                </div>
+            </div>
             {/* 1. Thẻ thống kê */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">

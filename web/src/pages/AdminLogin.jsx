@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_BASE = "http://localhost:3000"; // Đổi thành "" nếu bạn đã build chung với backend
+const API_BASE = ""; // Đổi thành "" nếu bạn đã build chung với backend
 
 export default function AdminLogin() {
   const [username, setUsername] = useState("");
@@ -41,7 +41,7 @@ export default function AdminLogin() {
             value={username} 
             onChange={(e) => setUsername(e.target.value)} 
             className="w-full border p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" 
-            placeholder="admin"
+            placeholder="username"
             required 
           />
         </div>
@@ -53,7 +53,7 @@ export default function AdminLogin() {
             value={password} 
             onChange={(e) => setPassword(e.target.value)} 
             className="w-full border p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" 
-            placeholder="••••••••"
+            placeholder="password"
             required 
           />
         </div>

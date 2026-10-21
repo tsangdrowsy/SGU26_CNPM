@@ -24,6 +24,7 @@ IF OBJECT_ID('dbo.UnlockTokens', 'U') IS NOT NULL DROP TABLE dbo.UnlockTokens;
 IF OBJECT_ID('dbo.Shopkeepers', 'U') IS NOT NULL DROP TABLE dbo.Shopkeepers;
 IF OBJECT_ID('dbo.POIs', 'U') IS NOT NULL DROP TABLE dbo.POIs;
 IF OBJECT_ID('dbo.Clerks', 'U') IS NOT NULL DROP TABLE dbo.Clerks;
+IF OBJECT_ID('dbo.Admins', 'U') IS NOT NULL DROP TABLE dbo.Admins;
 GO
 
 -- ==========================================
@@ -35,6 +36,16 @@ CREATE TABLE Clerks (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     Username NVARCHAR(100) NOT NULL UNIQUE,
     PasswordHash NVARCHAR(255) NOT NULL, -- Trong thực tế dùng bcrypt, ở đây mock string
+    FullName NVARCHAR(150),
+    CreatedAt DATETIME2 DEFAULT GETUTCDATE()
+);
+GO
+
+-- 2.1.1. Admins (Quản trị viên hệ thống)
+CREATE TABLE Admins (
+    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    Username NVARCHAR(100) NOT NULL UNIQUE,
+    PasswordHash NVARCHAR(255) NOT NULL, -- Chứa chuỗi Bcrypt
     FullName NVARCHAR(150),
     CreatedAt DATETIME2 DEFAULT GETUTCDATE()
 );
@@ -114,6 +125,11 @@ VALUES
 ('clerk01', 'hashed_password_123', 'Nguyễn Văn A'),
 ('admin', 'admin_hash_456', 'Trần Thị B');
 
+-- Insert Admins
+INSERT INTO Admins (Username, PasswordHash, FullName)
+VALUES 
+('admin', '$2a$10$1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h7j8k9l0m1n2o3p4q5r6s7t', N'Quản Trị Viên');
+
 -- Insert POIs
 INSERT INTO POIs (Id, Name, ShortDescriptionVi, FullDescriptionVi, Latitude, Longitude, RadiusMeters, ImageUrl)
 VALUES
@@ -158,3 +174,8 @@ BEGIN
     END
 END
 GO
+USE GuideFriendsDB;
+GO
+UPDATE Admins 
+SET PasswordHash = '$2b$10$0DgiUhK4vhuo49Va8YXqp.d6e3EluNtgku/bMjRJ19nU8toToTikO' -- 👈 Dán chuỗi vừa copy ở đây
+WHERE Username = 'admin';

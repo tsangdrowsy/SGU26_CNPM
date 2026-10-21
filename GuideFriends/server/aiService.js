@@ -16,7 +16,7 @@ function getGemini() {
   return aiClient;
 }
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 
 /**
  * Translate Vietnamese text into the target language.

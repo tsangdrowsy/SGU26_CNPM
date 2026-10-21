@@ -125,28 +125,58 @@ app.get("/api/pois/:id", async (req, res) => {
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// ---------- AI ROUTES ----------
+
+// server/server.js
 app.post("/api/ai/translate", async (req, res) => {
-  const { poiId, targetLang } = req.body ?? {};
-  if (!poiId || !targetLang) {
+  const { text, targetLang } = req.body ?? {};
+
+  if (!text || !targetLang) {
     return res.status(400).json({ error: "missing_params" });
   }
 
   try {
-    await connectPool();
-    const row = (
-      await pool.request()
-        .input("id", sql.VarChar(50), poiId)
-        .query(`SELECT ShortDescriptionVi FROM POIs WHERE Id = @id`)
-    ).recordset[0];
-
-    if (!row) return res.status(404).json({ error: "poi_not_found" });
-
-    const translated = await translateTextGemini(row.ShortDescriptionVi, targetLang);
+    const translated = await translateTextGemini(text, targetLang);
     res.json({ text: translated, cached: false });
   } catch (err) {
     console.error("[POST /api/ai/translate]", err);
     res.status(500).json({ error: "translate_failed", message: err.message });
+  }
+});
+
+// server/server.js
+app.post("/api/ai/translate-batch", async (req, res) => {
+  const { texts, targetLang } = req.body ?? {};
+
+  if (!texts || !Array.isArray(texts) || !targetLang) {
+    return res.status(400).json({ error: "missing_params" });
+  }
+  if (targetLang === "vi") return res.json({ texts });
+
+  try {
+    // Gộp cả mảng text thành 1 chuỗi JSON
+    const promptText = `Translate the following JSON array of strings into natural spoken ${targetLang}. Return ONLY a valid JSON array of strings in the exact same order. Do not include markdown formatting or backticks.\n\n${JSON.stringify(texts)}`;
+
+    // Import thư viện Gemini trực tiếp ở đây (hoặc từ aiService)
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+    // 👈 CHỈ GỌI API 1 LẦN DUY NHẤT
+    const response = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite", 
+      contents: promptText,
+    });
+
+    let rawText = response.text?.trim() || "[]";
+    if (rawText.startsWith("```json")) {
+      rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+    }
+    
+    const translatedArray = JSON.parse(rawText);
+    res.json({ texts: translatedArray });
+  } catch (err) {
+    console.error("[POST /api/ai/translate-batch]", err);
+    // Nếu AI lỗi (429), trả về nguyên bản tiếng Việt để app không bị crash
+    res.json({ texts }); 
   }
 });
 
@@ -338,9 +368,9 @@ app.post("/api/payment/create-vnpay-url", async (req, res) => {
       .query(`INSERT INTO UnlockTokens (Token, CreatedByClerkId, ExpiresAt, Source, IsUsed) VALUES (@token, @clerkId, @expiresAt, 'vnpay', 1)`);
 
     const paymentUrl = vnpay.buildPaymentUrl({
-      vnp_Amount: 15000, 
+      vnp_Amount: 15000,
       vnp_IpAddr: '127.0.0.1', // 👈 Bắt buộc dùng IPv4 khi chạy qua Ngrok
-      vnp_TxnRef: token, 
+      vnp_TxnRef: token,
       vnp_OrderInfo: `Thanh toan ve ${token}`,
       vnp_OrderType: ProductCode.Other,
       vnp_ReturnUrl: process.env.VNPAY_RETURN_URL,
@@ -357,7 +387,7 @@ app.post("/api/payment/create-vnpay-url", async (req, res) => {
 // 2. IPN URL (Webhook Server-to-Server)
 app.get('/api/payment/vnpay-ipn', async (req, res) => {
   console.log("🔥 [VNPAY IPN] Có tín hiệu gọi về từ VNPAY!", req.query); // 👈 Log để debug
-  
+
   try {
     const verify = vnpay.verifyIpnCall(req.query);
 
@@ -365,10 +395,10 @@ app.get('/api/payment/vnpay-ipn', async (req, res) => {
       console.log("❌ [VNPAY IPN] Sai chữ ký (Invalid signature)");
       return res.json({ RspCode: '97', Message: 'Invalid signature' });
     }
-    
+
     if (!verify.isSuccess) {
       console.log("⚠️ [VNPAY IPN] Giao dịch thất bại hoặc bị hủy");
-      return res.json({ RspCode: '00', Message: 'Confirm Success' }); 
+      return res.json({ RspCode: '00', Message: 'Confirm Success' });
     }
 
     // Cập nhật IsUsed = 0 (false) nghĩa là thanh toán thành công
@@ -387,7 +417,7 @@ app.get('/api/payment/vnpay-ipn', async (req, res) => {
 // 3. Return URL (Trình duyệt redirect về)
 app.get('/api/payment/vnpay-return', (req, res) => {
   const responseCode = req.query.vnp_ResponseCode;
-  
+
   if (responseCode === '00') {
     res.send(`
       <html>

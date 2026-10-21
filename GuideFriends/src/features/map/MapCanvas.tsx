@@ -52,7 +52,7 @@ function buildHtml(
       }
     }
 
-    var map = L.map("map", { zoomControl: false }).setView(
+    var map = L.map("map", { zoomControl: false, touchZoom: true,  bounceAtZoomLimits: false }).setView(
       [CENTER.latitude, CENTER.longitude], 17
     );
 
@@ -134,7 +134,7 @@ export default function MapCanvas({
   onMapTap,
 }: MapCanvasProps) {
   const webRef = useRef<WebView>(null);
-  
+
   // 🎯 FIX: Lock the initial center in a ref. 
   // This prevents the WebView from reloading/flickering every time GPS updates the `center` prop.
   const initialCenter = useRef(center);
@@ -175,7 +175,7 @@ export default function MapCanvas({
       } else if (data.type === "mapTap") {
         onMapTap();
       }
-    } catch {}
+    } catch { }
   };
 
   return (
@@ -191,6 +191,8 @@ export default function MapCanvas({
         bounces={false}
         onMessage={handleMessage}
         onLoadEnd={onReady}
+        setBuiltInZoomControls={false}
+        setDisplayZoomControls={false}
       />
 
       <View style={styles.zoomWrap}>
@@ -200,11 +202,11 @@ export default function MapCanvas({
         <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(-1)} activeOpacity={0.8}>
           <Text style={styles.zoomBtnText}>−</Text>
         </TouchableOpacity>
-        
+
         {/* 🎯 NEW: Locate Me Button */}
-        <TouchableOpacity 
-          style={[styles.zoomBtn, styles.locateBtn]} 
-          onPress={locateMe} 
+        <TouchableOpacity
+          style={[styles.zoomBtn, styles.locateBtn]}
+          onPress={locateMe}
           activeOpacity={0.8}
         >
           <Text style={styles.locateBtnText}>📍</Text>

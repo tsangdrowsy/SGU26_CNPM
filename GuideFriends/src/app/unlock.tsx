@@ -46,10 +46,10 @@ export default function UnlockScreen() {
         await AsyncStorage.setItem("access_token", token.toUpperCase());
         router.replace("/map");
       } else {
-        setMessage(data.error || "Mã không hợp lệ hoặc đã hết hạn.");
+        setMessage(data.error || "Invalid or expired code.");
       }
     } catch (e) {
-      setMessage("Lỗi kết nối tới server.");
+      setMessage("Error connecting to the server.");
     } finally {
       setLoading(false);
     }
@@ -73,13 +73,13 @@ export default function UnlockScreen() {
       // 3. Polling kiểm tra trạng thái sau khi khách quay lại
       pollPaymentStatus(data.token);
     } catch (e) {
-      Alert.alert("Lỗi", "Không thể tạo thanh toán VNPAY.");
+      Alert.alert("Error", "cannot create VNPay checkout.");
       setLoading(false);
     }
   };
 
   const pollPaymentStatus = (vnpayToken: string) => {
-    setMessage("Đang chờ xác nhận thanh toán...");
+    setMessage("Waiting for transaction confirmation...");
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`${API_BASE}/api/payment/check-status/${vnpayToken}`);
@@ -155,7 +155,7 @@ export default function UnlockScreen() {
               />
                <View style={{ marginLeft: 10, marginRight:10 , width: "100%" }}>
               <PrimaryButton
-                title="Thanh toán 15.000đ"
+                title="Checkout 15.000đ"
                 onPress={handleVNPayUnlock}
                 loading={loading}
                 

@@ -1,5 +1,6 @@
 // src/services/translationService.ts
 import { API_BASE } from "../api/pois";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Mảng dự phòng nếu AI sập (503)
 const MOCK_TRANSLATIONS: Record<string, Record<string, string>> = {
@@ -53,5 +54,49 @@ export async function translatePoi(
     // Tuyệt đối không trả về textVi để tránh giọng Anh đọc tiếng Việt.
     const fallbackText = MOCK_TRANSLATIONS[poiId]?.[targetLang] || textVi;
     return fallbackText;
+  }
+}
+export async function translateText(textVi: string, targetLang: string): Promise<string> {
+  if (targetLang === "vi" || !textVi) return textVi;
+
+  // Tạo key cache dựa trên mã băm của text để tránh trùng lặp
+  const cacheKey = `trans_${textVi.substring(0, 30)}_${targetLang}`;
+  
+  try {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) return cached;
+
+    const res = await fetch(`${API_BASE}/api/ai/translate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: textVi, targetLang }),
+    });
+
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const data = await res.json();
+    
+    await AsyncStorage.setItem(cacheKey, data.text);
+    return data.text;
+  } catch (e) {
+    console.warn("[translate] AI failed, fallback to original:", e);
+    return textVi; // Nếu AI lỗi, hiển thị tiếng Việt
+  }
+}
+export async function translateBatch(texts: string[], targetLang: string): Promise<string[]> {
+  if (targetLang === "vi" || texts.length === 0) return texts;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/translate-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts, targetLang }),
+    });
+
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const data = await res.json();
+    return data.texts;
+  } catch (e) {
+    console.warn("[translateBatch] failed:", e);
+    return texts; // Fallback
   }
 }

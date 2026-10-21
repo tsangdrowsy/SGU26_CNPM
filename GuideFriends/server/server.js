@@ -1,4 +1,5 @@
 import express from "express";
+import bcrypt from "bcryptjs";
 import cors from "cors";
 import sql from "mssql";
 import dotenv from "dotenv";
@@ -223,6 +224,30 @@ app.post("/api/auth/validate-token", async (req, res) => {
 });
 
 // ---------- ADMIN ROUTES ----------
+
+app.post("/api/admin/login", async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: "Vui lòng nhập đủ tài khoản và mật khẩu" });
+
+  try {
+    await connectPool();
+    const result = await pool.request()
+      .input("username", sql.NVarChar(100), username)
+      .query("SELECT * FROM Admins WHERE Username = @username");
+
+    const admin = result.recordset[0];
+    if (!admin) return res.status(401).json({ error: "Sai tài khoản hoặc mật khẩu" });
+
+    // So sánh mật khẩu người dùng nhập với hash trong DB
+    const isMatch = await bcrypt.compare(password, admin.PasswordHash);
+    if (!isMatch) return res.status(401).json({ error: "Sai tài khoản hoặc mật khẩu" });
+
+    // Trả về thành công (Ở dự án thực tế sẽ trả về JWT)
+    res.json({ success: true, message: "Đăng nhập thành công", adminName: admin.FullName });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get("/api/admin/stats", async (req, res) => {
   try {
     await connectPool();

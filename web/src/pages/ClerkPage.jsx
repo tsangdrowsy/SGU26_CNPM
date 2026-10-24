@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 
-const API_BASE = "";
+const API_BASE = "http://localhost:3000";
 
 export default function ClerkPage() {
   const [tokenData, setTokenData] = useState(null);

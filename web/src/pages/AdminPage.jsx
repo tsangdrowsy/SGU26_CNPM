@@ -3,17 +3,17 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { PlusCircle, Image as ImageIcon, MapPin, Edit, LogOut } from "lucide-react";// 👈 Đã thêm Edit
 
-const API_BASE = "";
+const API_BASE = "http://localhost:3000";
 
 export default function AdminPage() {
     const navigate = useNavigate();
     const adminName = localStorage.getItem("admin_name") || "Admin";
-    const [stats, setStats] = useState({ totalTokens: 0, activeTokens: 0, totalPois: 0 });
+    const [stats, setStats] = useState({ totalTokens: 0, activeUsers: 0, totalPois: 0 });
     const [tokens, setTokens] = useState([]);
     const [pois, setPois] = useState([]);
     const [loading, setLoading] = useState(false);
 
-     const handleLogout = () => {
+    const handleLogout = () => {
         localStorage.removeItem("admin_token");
         localStorage.removeItem("admin_name");
         navigate("/admin/login");
@@ -106,19 +106,27 @@ export default function AdminPage() {
                 </div>
             </div>
             {/* 1. Thẻ thống kê */}
+            {/* 1. Thẻ thống kê */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                {/* Thẻ 1 */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500 font-medium">Tổng số Token đã tạo</p>
                     <p className="text-4xl font-bold text-blue-600 mt-2">{stats.totalTokens}</p>
                 </div>
+
+                {/* Thẻ 2 - NGƯỜI DÙNG ĐANG HOẠT ĐỘNG */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500 font-medium">Token đang hoạt động</p>
-                    <p className="text-4xl font-bold text-green-600 mt-2">{stats.activeTokens}</p>
+                    <p className="text-sm text-gray-500 font-medium">Người dùng đang hoạt động</p>
+                    <p className="text-4xl font-bold text-green-600 mt-2">{stats.activeUsers}</p>
                 </div>
+
+                {/* Thẻ 3 */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500 font-medium">Tổng số Địa điểm (POI)</p>
                     <p className="text-4xl font-bold text-orange-500 mt-2">{stats.totalPois}</p>
                 </div>
+
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -130,7 +138,7 @@ export default function AdminPage() {
                             <thead className="sticky top-0 bg-gray-50">
                                 <tr>
                                     <th className="p-3 border-b font-semibold text-gray-600">Mã Token</th>
-                                   <th className="p-3 border-b font semibold text-gray-600">Created by</th>
+                                    <th className="p-3 border-b font semibold text-gray-600">Created by</th>
                                     <th className="p-3 border-b font-semibold text-gray-600">Hết hạn</th>
                                 </tr>
                             </thead>
@@ -140,8 +148,8 @@ export default function AdminPage() {
                                         <td className="p-3 font-mono font-bold text-orange-600">{t.Token}</td>
                                         <td className="p-3">
                                             <span className={`px-2 py-1 rounded text-xs font-bold ${t.Source === 'vnpay' ? 'bg-blue-100 text-blue-700' :
-                                                    t.Source === 'vietqr' ? 'bg-purple-100 text-purple-700' :
-                                                        'bg-orange-100 text-orange-700'
+                                                t.Source === 'vietqr' ? 'bg-purple-100 text-purple-700' :
+                                                    'bg-orange-100 text-orange-700'
                                                 }`}>
                                                 {t.Source === 'vnpay' ? 'VNPAY' : t.Source === 'vietqr' ? 'VietQR' : 'Clerk'}
                                             </span>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_BASE = ""; // Đổi thành "" nếu bạn đã build chung với backend
+const API_BASE = "http://localhost:3000"; // Đổi thành "" nếu bạn đã build chung với backend
 
 export default function AdminLogin() {
   const [username, setUsername] = useState("");

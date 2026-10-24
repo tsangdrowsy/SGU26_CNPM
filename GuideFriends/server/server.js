@@ -164,7 +164,7 @@ app.post("/api/ai/translate-batch", async (req, res) => {
 
     // 👈 CHỈ GỌI API 1 LẦN DUY NHẤT
     const response = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite", 
+      model: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
       contents: promptText,
     });
 
@@ -172,13 +172,13 @@ app.post("/api/ai/translate-batch", async (req, res) => {
     if (rawText.startsWith("```json")) {
       rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
     }
-    
+
     const translatedArray = JSON.parse(rawText);
     res.json({ texts: translatedArray });
   } catch (err) {
     console.error("[POST /api/ai/translate-batch]", err);
     // Nếu AI lỗi (429), trả về nguyên bản tiếng Việt để app không bị crash
-    res.json({ texts }); 
+    res.json({ texts });
   }
 });
 
@@ -239,6 +239,7 @@ app.post("/api/auth/validate-token", async (req, res) => {
 
   try {
     await connectPool();
+    // Kiểm tra xem mã có tồn tại, chưa hết hạn và chưa dùng không
     const result = await pool.request()
       .input("token", sql.VarChar(36), token)
       .query(`SELECT Token, ExpiresAt FROM UnlockTokens 
@@ -248,12 +249,16 @@ app.post("/api/auth/validate-token", async (req, res) => {
       return res.status(401).json({ error: "Mã không hợp lệ hoặc đã hết hạn." });
     }
 
+
+    // await pool.request()
+    //   .input("token", sql.VarChar(36), token)
+    //   .query(`UPDATE UnlockTokens SET IsUsed = 1 WHERE Token = @token`);
+
     res.json({ valid: true, message: "Mở khóa thành công!" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 // ---------- ADMIN ROUTES ----------
 
 app.post("/api/admin/login", async (req, res) => {
@@ -283,10 +288,14 @@ app.get("/api/admin/stats", async (req, res) => {
   try {
     await connectPool();
     const totalTokens = (await pool.request().query("SELECT COUNT(*) as count FROM UnlockTokens")).recordset[0].count;
-    const activeTokens = (await pool.request().query("SELECT COUNT(*) as count FROM UnlockTokens WHERE ExpiresAt > GETUTCDATE() AND IsUsed = 0")).recordset[0].count;
+
+    // 👇 Thêm dòng này để đếm số người dùng đang hoạt động
+    const activeUsers = (await pool.request().query("SELECT COUNT(*) as count FROM UnlockTokens WHERE ExpiresAt > GETUTCDATE() AND IsUsed = 0")).recordset[0].count;
+
     const totalPois = (await pool.request().query("SELECT COUNT(*) as count FROM POIs")).recordset[0].count;
 
-    res.json({ totalTokens, activeTokens, totalPois });
+    // Trả về thêm activeUsers
+    res.json({ totalTokens, activeUsers, totalPois });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -441,33 +450,51 @@ app.get('/api/payment/vnpay-ipn', async (req, res) => {
 });
 
 // 3. Return URL (Trình duyệt redirect về)
-app.get('/api/payment/vnpay-return', (req, res) => {
-  const responseCode = req.query.vnp_ResponseCode;
+// 3. Return URL (Trình duyệt redirect về)
+app.get('/api/payment/vnpay-return', async (req, res) => {
+  const responseCode = String(req.query.vnp_ResponseCode || "");
+  const token = req.query.vnp_TxnRef;
 
-  if (responseCode === '00') {
+  //  Log ra để xem VNPAY thực sự gửi cái gì về
+  console.log(" [VNPAY Return] Tham số nhận được:", req.query);
+
+  if (responseCode === '00' && token) {
+    // 1. Gửi HTML về cho trình duyệt ngay lập tức (để App không bị treo chờ)
     res.send(`
       <html>
         <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
           <h1 style="color: green;">Thanh toán thành công!</h1>
-          <p>Mã giao dịch: ${req.query.vnp_TxnRef}</p>
+          <p>Mã giao dịch: ${token}</p>
           <p>Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
         </body>
       </html>
     `);
-  } else {
-    res.send(`
-      <html>
-        <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
-          <h1 style="color: red;">Thanh toán thất bại hoặc đã bị hủy!</h1>
-          <p>Mã lỗi: ${responseCode}</p>
-          <p>Vui lòng thử lại.</p>
-        </body>
-      </html>
-    `);
+
+    // 2. Chạy ngầm cập nhật Database
+    try {
+      await connectPool();
+      await pool.request()
+        .input("token", sql.VarChar(36), token)
+        .query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
+      console.log(` [VNPAY Return] Đã cập nhật Token ${token} (IsUsed = 0)`);
+    } catch (err) {
+      console.error("[VNPAY Return] Lỗi cập nhật DB:", err);
+    }
+    return;
   }
+
+  // Trường hợp thanh toán thất bại hoặc hủy
+  res.send(`
+    <html>
+      <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+        <h1 style="color: red;">Thanh toán thất bại hoặc đã bị hủy!</h1>
+        <p>Mã lỗi: ${responseCode}</p>
+        <p>Vui lòng thử lại.</p>
+      </body>
+    </html>
+  `);
 });
 
-// 4. Check Status (Mobile App polling)
 app.get("/api/payment/check-status/:token", async (req, res) => {
   try {
     await connectPool();
@@ -477,7 +504,7 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
 
     if (result.recordset.length === 0) return res.status(404).json({ error: "Not found" });
 
-    // Kiểm tra boolean (false hoặc 0)
+    // Nếu IsUsed = 0 (hoặc false), trả về success
     if (!result.recordset[0].IsUsed) {
       res.json({ status: "success" });
     } else {

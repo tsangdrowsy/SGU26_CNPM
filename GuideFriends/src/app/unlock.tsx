@@ -56,33 +56,55 @@ export default function UnlockScreen() {
   };
 
   // --- LUỒNG 2: THANH TOÁN VNPAY ---
+ // --- LUỒNG 2: THANH TOÁN VNPAY ---
   const handleVNPayUnlock = async () => {
     setLoading(true);
+    setMessage("");
+    
     try {
-      // 1. Gọi backend lấy URL thanh toán VNPAY
       const res = await fetch(`${API_BASE}/api/payment/create-vnpay-url`, {
         method: "POST",
+        //  Thêm header tránh Ngrok chặn
+        headers: { 'ngrok-skip-browser-warning': 'true' },
       });
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error);
 
-      // 2. Mở trình duyệt VNPAY
+      // Mở trình duyệt VNPAY
       await WebBrowser.openBrowserAsync(data.paymentUrl);
 
-      // 3. Polling kiểm tra trạng thái sau khi khách quay lại
+      // 👈 TẮT LOADING NÚT BẤM (Vì đã mở trình duyệt thành công)
+      setLoading(false); 
+
+      // Bắt đầu hỏi server xem đã thanh toán chưa
       pollPaymentStatus(data.token);
     } catch (e) {
-      Alert.alert("Error", "cannot create VNPay checkout.");
+      Alert.alert("Error", "Cannot create VNPay checkout.");
       setLoading(false);
     }
   };
 
+
   const pollPaymentStatus = (vnpayToken: string) => {
     setMessage("Waiting for transaction confirmation...");
+    
+    let attempts = 0;
     const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > 100) { // Hủy sau 5 phút để tránh treo
+        clearInterval(interval);
+        setMessage("Timeout. Please try again or check with the clerk.");
+        return;
+      }
+
       try {
-        const res = await fetch(`${API_BASE}/api/payment/check-status/${vnpayToken}`);
+        // 👈 Thêm header tránh Ngrok chặn
+        const res = await fetch(`${API_BASE}/api/payment/check-status/${vnpayToken}`, {
+          headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+        
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
         const data = await res.json();
 
         if (data.status === "success") {
@@ -91,11 +113,10 @@ export default function UnlockScreen() {
           router.replace("/map");
         }
       } catch (e) {
-        // Bỏ qua lỗi mạng tạm thời trong lúc polling
+        console.error("Polling error:", e); //  In lỗi ra console để biết Ngrok có chặn không
       }
     }, 3000); // 3 giây hỏi 1 lần
   };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -147,7 +168,7 @@ export default function UnlockScreen() {
           ) : (
             <View style={{ gap: 16, alignItems: "center" }}>
               <Text style={{ textAlign: "center", color: colors.textSecondary, marginBottom: 8 }}>
-                Thanh toán an toàn qua cổng VNPAY để nhận mã kích hoạt tự động.
+                Secured payment through VNPAY to receive automatic activation codes.
               </Text>
               <Image
                 source={{ uri: "https://vnpay.vn/wp-content/uploads/2020/07/Logo-VNPAY-1024x576.png" }}

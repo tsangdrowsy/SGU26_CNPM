@@ -92,17 +92,7 @@ CREATE TABLE UnlockTokens (
 );
 GO
 
--- 2.5. ChatLogs (Lưu lịch sử Chatbot AI RAG - Flow 3)
-CREATE TABLE ChatLogs (
-    Id INT IDENTITY(1,1) PRIMARY KEY,
-    PoiId VARCHAR(50) NULL, -- Null nếu hỏi chung chung
-    UserQuestion NVARCHAR(MAX) NOT NULL,
-    AiResponse NVARCHAR(MAX) NOT NULL,
-    LanguageCode VARCHAR(5) DEFAULT 'en',
-    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    FOREIGN KEY (PoiId) REFERENCES POIs(Id) ON DELETE SET NULL
-);
-GO
+
 -- Thêm cột Source nếu chưa có (bỏ qua nếu đã thêm từ trước)
 ALTER TABLE UnlockTokens ADD Source VARCHAR(20) DEFAULT 'clerk';
 

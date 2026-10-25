@@ -19,7 +19,7 @@ GO
 -- ==========================================
 -- 1. XÓA CÁC BẢNG CŨ (Đảm bảo chạy script không bị lỗi)
 -- ==========================================
-IF OBJECT_ID('dbo.ChatLogs', 'U') IS NOT NULL DROP TABLE dbo.ChatLogs;
+
 IF OBJECT_ID('dbo.UnlockTokens', 'U') IS NOT NULL DROP TABLE dbo.UnlockTokens;
 IF OBJECT_ID('dbo.Shopkeepers', 'U') IS NOT NULL DROP TABLE dbo.Shopkeepers;
 IF OBJECT_ID('dbo.POIs', 'U') IS NOT NULL DROP TABLE dbo.POIs;
@@ -93,6 +93,13 @@ CREATE TABLE UnlockTokens (
 GO
 
 
+-- Thêm cột Trạng thái (pending: Chờ duyệt, approved: Đã duyệt)
+ALTER TABLE Shopkeepers ADD Status VARCHAR(20) DEFAULT 'pending';
+-- Thêm cột Tọa độ
+ALTER TABLE Shopkeepers ADD Latitude DECIMAL(9, 6);
+ALTER TABLE Shopkeepers ADD Longitude DECIMAL(9, 6);
+GO
+
 -- Thêm cột Source nếu chưa có (bỏ qua nếu đã thêm từ trước)
 ALTER TABLE UnlockTokens ADD Source VARCHAR(20) DEFAULT 'clerk';
 
@@ -102,7 +109,7 @@ ALTER TABLE UnlockTokens ADD Source VARCHAR(20) DEFAULT 'clerk';
 CREATE INDEX IX_Shopkeepers_PoiId ON Shopkeepers(PoiId);
 CREATE INDEX IX_Shopkeepers_ClaimCode ON Shopkeepers(ClaimCode);
 CREATE INDEX IX_UnlockTokens_ExpiresAt ON UnlockTokens(ExpiresAt);
-CREATE INDEX IX_ChatLogs_PoiId ON ChatLogs(PoiId);
+
 GO
 
 -- ==========================================
@@ -128,10 +135,10 @@ VALUES
 ('poi_003', N'Cổng Tam Quan', N'Cổng vào chính của chùa với kiến trúc truyền thống.', N'Cổng Tam Quan là nơi đón tiếp du khách, mang đậm nét kiến trúc Phật giáo truyền thống với mái ngói cong vút và các họa tiết rồng phượng tinh xảo.', 16.12305, 108.23410, 15, 'https://example.com/cong.jpg');
 
 -- Insert Shopkeepers
-INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, ImageUrl, OpeningHours, Phone, ClaimCode, IsClaimed)
+INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, ImageUrl, OpeningHours, Phone, ClaimCode, IsClaimed, Status)
 VALUES
-('shop_001', 'poi_001', N'Quán Chay Sơn Trà', N'Phục vụ các món chay thanh đạm, không gian yên tĩnh, view nhìn ra biển Đà Nẵng.', 'https://example.com/chay.jpg', '08:00 - 21:00', '0905123456', 'CLAIM-CHAY-01', 1),
-('shop_002', 'poi_001', N'Tiệm Lưu Niệm Phật Giáo', N'Chuyên cung cấp vòng tay gỗ, tượng gỗ, nhang trầm và đồ thờ cúng.', 'https://example.com/luuniem.jpg', '07:00 - 18:00', '0905654321', 'CLAIM-LUU-02', 0);
+('shop_001', 'poi_001', N'Quán Chay Sơn Trà', N'Phục vụ các món chay thanh đạm, không gian yên tĩnh, view nhìn ra biển Đà Nẵng.', 'https://example.com/chay.jpg', '08:00 - 21:00', '0905123456', 'CLAIM-CHAY-01', 1,pending),
+('shop_002', 'poi_002', N'Tiệm Lưu Niệm Phật Giáo', N'Chuyên cung cấp vòng tay gỗ, tượng gỗ, nhang trầm và đồ thờ cúng.', 'https://example.com/luuniem.jpg', '07:00 - 18:00', '0905654321', 'CLAIM-LUU-02', 0, pending);
 
 -- Insert Mock Token (Hết hạn sau 24h kể từ lúc chạy script)
 INSERT INTO UnlockTokens (Token, CreatedByClerkId, ExpiresAt)
@@ -170,11 +177,4 @@ UPDATE Admins
 SET PasswordHash = '$2b$10$0DgiUhK4vhuo49Va8YXqp.d6e3EluNtgku/bMjRJ19nU8toToTikO' -- 👈 Dán chuỗi vừa copy ở đây
 WHERE Username = 'admin';
 USE GuideFriendsDB;
-GO
-
--- Thêm cột Trạng thái (pending: Chờ duyệt, approved: Đã duyệt)
-ALTER TABLE Shopkeepers ADD Status VARCHAR(20) DEFAULT 'pending';
--- Thêm cột Tọa độ
-ALTER TABLE Shopkeepers ADD Latitude DECIMAL(9, 6);
-ALTER TABLE Shopkeepers ADD Longitude DECIMAL(9, 6);
 GO

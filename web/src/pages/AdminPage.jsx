@@ -20,6 +20,7 @@ export default function AdminPage() {
     };
 
     // State cho Form
+    const [pendingShops, setPendingShops] = useState([]);
     const [editingId, setEditingId] = useState(null); // 👈 Đã dời lên đây
     const [formData, setFormData] = useState({
         name: "", shortDescriptionVi: "", fullDescriptionVi: "",
@@ -29,6 +30,7 @@ export default function AdminPage() {
 
     // Hàm load dữ liệu
     const loadData = () => {
+        axios.get(`${API_BASE}/api/admin/shopkeeper/pending`).then(res => setPendingShops(res.data.shops));
         axios.get(`${API_BASE}/api/admin/stats`).then(res => setStats(res.data));
         axios.get(`${API_BASE}/api/admin/tokens`).then(res => setTokens(res.data.tokens));
         axios.get(`${API_BASE}/api/pois`).then(res => setPois(res.data.pois));
@@ -92,6 +94,18 @@ export default function AdminPage() {
             setLoading(false);
         }
     };
+    const handleApproveShop = async (id) => {
+    if(!window.confirm("Xác nhận đã thu tiền mặt và duyệt quán này?")) return;
+    try {
+        const res = await axios.post(`${API_BASE}/api/admin/shopkeeper/approve/${id}`);
+        alert(`Đã duyệt! Mã Claim Code của quán là: ${res.data.claimCode}`);
+        loadData(); // Load lại danh sách
+    } catch (err) {
+        alert("Lỗi duyệt quán");
+    }
+    };
+    
+    
 
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -162,6 +176,31 @@ export default function AdminPage() {
                         {tokens.length === 0 && <p className="text-gray-400 text-center mt-4">Chưa có token nào.</p>}
                     </div>
                 </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-8">
+    <h2 className="text-xl font-bold mb-4">Duyệt Cửa hàng mới (Tiền mặt)</h2>
+    <table className="w-full text-left text-sm border-collapse">
+        <thead className="bg-gray-50">
+            <tr>
+                <th className="p-3 border-b">Tên quán</th>
+                <th className="p-3 border-b">SĐT</th>
+                <th className="p-3 border-b">Thao tác</th>
+            </tr>
+                    </thead>
+                    <tbody>
+            {pendingShops.map(shop => (
+                <tr key={shop.Id}>
+                    <td className="p-3">{shop.Name}</td>
+                    <td className="p-3">{shop.Phone}</td>
+                    <td className="p-3">
+                        <button onClick={() => handleApproveShop(shop.Id)} className="bg-green-500 text-white px-3 py-1 rounded">Duyệt</button>
+                                 </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            {pendingShops.length === 0 && <p className="text-gray-400 mt-4 text-center">Không có cửa hàng nào đang chờ duyệt.</p>}
+            </div>
 
                 {/* 3. Form Thêm/Sửa POI */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">

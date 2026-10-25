@@ -169,3 +169,12 @@ GO
 UPDATE Admins 
 SET PasswordHash = '$2b$10$0DgiUhK4vhuo49Va8YXqp.d6e3EluNtgku/bMjRJ19nU8toToTikO' -- 👈 Dán chuỗi vừa copy ở đây
 WHERE Username = 'admin';
+USE GuideFriendsDB;
+GO
+
+-- Thêm cột Trạng thái (pending: Chờ duyệt, approved: Đã duyệt)
+ALTER TABLE Shopkeepers ADD Status VARCHAR(20) DEFAULT 'pending';
+-- Thêm cột Tọa độ
+ALTER TABLE Shopkeepers ADD Latitude DECIMAL(9, 6);
+ALTER TABLE Shopkeepers ADD Longitude DECIMAL(9, 6);
+GO

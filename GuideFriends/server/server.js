@@ -385,6 +385,29 @@ app.put("/api/admin/pois/:id", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.post("/api/admin/shopkeeper/approve/:id", async (req, res) => {
+  try {
+    await connectPool();
+    const claimCode = "CLAIM-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+    await pool.request()
+      .input("id", sql.VarChar(50), req.params.id)
+      .input("claimCode", sql.NVarChar(50), claimCode)
+      .query("UPDATE Shopkeepers SET Status = 'approved', ClaimCode = @claimCode WHERE Id = @id");
+    res.json({ success: true, claimCode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/shopkeeper/pending", async (req, res) => {
+  try {
+    await connectPool();
+    const result = await pool.request().query("SELECT * FROM Shopkeepers WHERE Status = 'pending'");
+    res.json({ shops: result.recordset });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ---------- VNPAY ROUTES ----------
 // 1. Tạo URL thanh toán
@@ -421,7 +444,7 @@ app.post("/api/payment/create-vnpay-url", async (req, res) => {
 
 // 2. IPN URL (Webhook Server-to-Server)
 app.get('/api/payment/vnpay-ipn', async (req, res) => {
-  console.log("🔥 [VNPAY IPN] Có tín hiệu gọi về từ VNPAY!", req.query); // 👈 Log để debug
+  console.log("🔥 [VNPAY IPN] Có tín hiệu gọi về từ VNPAY!", req.query);
 
   try {
     const verify = vnpay.verifyIpnCall(req.query);
@@ -436,15 +459,44 @@ app.get('/api/payment/vnpay-ipn', async (req, res) => {
       return res.json({ RspCode: '00', Message: 'Confirm Success' });
     }
 
-    // Cập nhật IsUsed = 0 (false) nghĩa là thanh toán thành công
-    await pool.request()
-      .input("token", sql.VarChar(36), verify.vnp_TxnRef)
-      .query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
+    const txnRef = verify.vnp_TxnRef;
 
-    console.log(` [VNPAY IPN] Đã cập nhật Token ${verify.vnp_TxnRef} thành công!`);
-    return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    // =========================================================
+    // PHÂN LUỒNG: NẾU LÀ THANH TOÁN CỦA SHOPKEEPER (Bắt đầu bằng SHOP_)
+    // =========================================================
+    if (txnRef.startsWith('SHOP_')) {
+      const shopId = txnRef.replace('SHOP_', ''); // Lấy lại ID của quán
+      const claimCode = "CLAIM-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+      // Cập nhật trạng thái thành approved và cấp ClaimCode
+      await pool.request()
+        .input("id", sql.VarChar(50), shopId)
+        .input("claimCode", sql.NVarChar(50), claimCode)
+        .query(`
+          UPDATE Shopkeepers 
+          SET Status = 'approved', ClaimCode = @claimCode 
+          WHERE Id = @id
+        `);
+
+      console.log(`✅ [VNPAY IPN] Shop ${shopId} đã thanh toán. Mã ClaimCode: ${claimCode}`);
+      return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    } 
+    
+    // =========================================================
+    // PHÂN LUỒNG: NẾU LÀ THANH TOÁN VÉ CỦA KHÁCH (Token 6 ký tự)
+    // =========================================================
+    else {
+      // Cập nhật IsUsed = 0 (false) nghĩa là thanh toán thành công
+      await pool.request()
+        .input("token", sql.VarChar(36), txnRef)
+        .query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
+
+      console.log(`✅ [VNPAY IPN] Đã kích hoạt Token ${txnRef} cho khách hàng!`);
+      return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    }
+
   } catch (err) {
-    console.error(" [VNPAY IPN] Lỗi:", err);
+    console.error("❌ [VNPAY IPN] Lỗi:", err);
     return res.json({ RspCode: '99', Message: 'Unknown error' });
   }
 });
@@ -517,6 +569,136 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
 //host web
 app.get('*', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+});
+app.get("/api/pois", async (_req, res) => {
+  try {
+    await connectPool();
+    const poiResult = await pool.request().query(`SELECT * FROM POIs ORDER BY Id`);
+    const pois = poiResult.recordset.map(rowToPoi);
+
+    // 👈 Chỉ lấy những quán có Status = 'approved'
+    const shopResult = await pool.request().query(`SELECT * FROM Shopkeepers WHERE Status = 'approved'`);
+    const shops = shopResult.recordset;
+
+    const finalPois = pois.map(poi => ({
+      ...poi,
+      shopkeepers: shops.filter(s => s.PoiId === poi.id).map(s => ({
+        id: s.Id, name: s.Name, descriptionVi: s.DescriptionVi,
+        imageUrl: s.ImageUrl, openingHours: s.OpeningHours, phone: s.Phone
+      }))
+    }));
+
+    res.json({ pois: finalPois });
+  } catch (err) {
+    res.status(500).json({ error: "db_error", message: err.message });
+  }
+});
+app.get("/api/shopkeeper/verify/:claimCode", async (req, res) => {
+  try {
+    await connectPool();
+    const result = await pool.request()
+      .input("claimCode", sql.NVarChar(50), req.params.claimCode)
+      .query("SELECT * FROM Shopkeepers WHERE ClaimCode = @claimCode");
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: "Mã không hợp lệ hoặc không tồn tại." });
+    }
+    res.json({ shop: result.recordset[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.put("/api/shopkeeper/update/:claimCode", upload.single("image"), async (req, res) => {
+  const { claimCode } = req.params;
+  const { name, descriptionVi, openingHours, phone } = req.body;
+
+  try {
+    await connectPool();
+    
+    // Lấy thông tin cũ để giữ lại ảnh nếu không upload ảnh mới
+    const oldShop = (await pool.request()
+      .input("claimCode", sql.NVarChar(50), claimCode)
+      .query("SELECT ImageUrl FROM Shopkeepers WHERE ClaimCode = @claimCode")).recordset[0];
+
+    if (!oldShop) return res.status(404).json({ error: "Mã không hợp lệ" });
+
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : oldShop.ImageUrl;
+
+    await pool.request()
+      .input("claimCode", sql.NVarChar(50), claimCode)
+      .input("name", sql.NVarChar(255), name)
+      .input("desc", sql.NVarChar(1000), descriptionVi)
+      .input("hours", sql.NVarChar(100), openingHours)
+      .input("phone", sql.NVarChar(20), phone)
+      .input("img", sql.NVarChar(500), imageUrl)
+      .query(`
+        UPDATE Shopkeepers 
+        SET Name = @name, DescriptionVi = @desc, OpeningHours = @hours, 
+            Phone = @phone, ImageUrl = @img, IsClaimed = 1
+        WHERE ClaimCode = @claimCode
+      `);
+
+    res.json({ success: true, message: "Cập nhật thành công!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// ---------- API: Đăng ký quán mới ----------
+app.post("/api/shopkeeper/register", upload.single("image"), async (req, res) => {
+  const { poiId, name, descriptionVi, openingHours, phone, latitude, longitude, paymentMethod } = req.body;
+
+  if (!poiId || !name || !latitude || !longitude) {
+    return res.status(400).json({ error: "Vui lòng nhập đủ thông tin và chọn vị trí trên bản đồ." });
+  }
+
+  try {
+    await connectPool();
+    const shopId = "shop_" + Math.floor(1000 + Math.random() * 9000);
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    
+    // Nếu thanh toán tiền mặt, trạng thái là pending (chờ duyệt)
+    // Nếu thanh toán VNPAY, trạng thái tạm thời vẫn là pending (chờ VNPAY báo về mới duyệt)
+    const status = 'pending';
+    const claimCode = paymentMethod === 'cash' ? null : "CLAIM-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+    await pool.request()
+      .input("id", sql.VarChar(50), shopId)
+      .input("poiId", sql.VarChar(50), poiId)
+      .input("name", sql.NVarChar(255), name)
+      .input("desc", sql.NVarChar(1000), descriptionVi || "")
+      .input("hours", sql.NVarChar(100), openingHours || "")
+      .input("phone", sql.NVarChar(20), phone || "")
+      .input("img", sql.NVarChar(500), imageUrl)
+      .input("lat", sql.Decimal(9, 6), latitude)
+      .input("lng", sql.Decimal(9, 6), longitude)
+      .input("claimCode", sql.NVarChar(50), claimCode)
+      .input("status", sql.VarChar(20), status)
+      .query(`
+        INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, OpeningHours, Phone, ImageUrl, Latitude, Longitude, ClaimCode, Status, IsClaimed)
+        VALUES (@id, @poiId, @name, @desc, @hours, @phone, @img, @lat, @lng, @claimCode, @status, 1)
+      `);
+
+    res.json({ success: true, shopId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/api/payment/create-shop-vnpay", async (req, res) => {
+  const { shopId } = req.body;
+  try {
+    const paymentUrl = vnpay.buildPaymentUrl({
+      vnp_Amount: 50000, // Phí đăng ký (VD: 50k)
+      vnp_IpAddr: '127.0.0.1',
+      vnp_TxnRef: `SHOP_${shopId}`, // 👈 Đánh dấu đây là thanh toán của Shop
+      vnp_OrderInfo: `Phi dang ky cua hang ${shopId}`,
+      vnp_OrderType: ProductCode.Other,
+      vnp_ReturnUrl: process.env.VNPAY_RETURN_URL,
+      vnp_Locale: VnpLocale.VN,
+    });
+    res.json({ paymentUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 // ---------- START SERVER ----------
 app.listen(process.env.PORT ?? 3000, async () => {

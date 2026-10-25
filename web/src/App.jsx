@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom
 import ClerkPage from "./pages/ClerkPage";
 import AdminPage from "./pages/AdminPage";
 import AdminLogin from "./pages/AdminLogin";
+import ShopkeeperPage from "./pages/ShopkeeperPage";
 
 const ProtectedRoute = () => {
   const isAuthenticated = localStorage.getItem("admin_token");
@@ -20,6 +21,8 @@ function App() {
         </nav>
 
         <Routes>
+          {/* Route cho Shopkeeper */}
+          <Route path="/shopkeeper" element={<ShopkeeperPage />} /> 
           {/* Nếu vào trang chủ, tự động chuyển hướng sang Clerk */}
           <Route path="/" element={<Navigate to="/clerk" replace />} />
           <Route path="/admin/login" element={<AdminLogin />} />

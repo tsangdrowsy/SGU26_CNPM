@@ -3,6 +3,7 @@ import ClerkPage from "./pages/ClerkPage";
 import AdminPage from "./pages/AdminPage";
 import AdminLogin from "./pages/AdminLogin";
 import ShopkeeperPage from "./pages/ShopkeeperPage";
+import ShopkeeperEditPage from "./pages/ShopkeeperEditPage";
 
 const ProtectedRoute = () => {
   const isAuthenticated = localStorage.getItem("admin_token");
@@ -23,6 +24,7 @@ function App() {
         <Routes>
           {/* Route cho Shopkeeper */}
           <Route path="/shopkeeper" element={<ShopkeeperPage />} /> 
+          <Route path="/shopkeeper/edit/:code" element={<ShopkeeperEditPage />} />
           {/* Nếu vào trang chủ, tự động chuyển hướng sang Clerk */}
           <Route path="/" element={<Navigate to="/clerk" replace />} />
           <Route path="/admin/login" element={<AdminLogin />} />

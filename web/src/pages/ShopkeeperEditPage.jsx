@@ -13,8 +13,11 @@ export default function ShopkeeperEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   
+  // 👈 Thêm state lưu danh sách POIs
+  const [pois, setPois] = useState([]);
+
   const [formData, setFormData] = useState({
-    name: "", descriptionVi: "", openingHours: "", phone: ""
+    name: "", descriptionVi: "", openingHours: "", phone: "", poiId: "" // 👈 Thêm poiId
   });
   const [startHour, setStartHour] = useState("08");
   const [endHour, setEndHour] = useState("21");
@@ -22,14 +25,18 @@ export default function ShopkeeperEditPage() {
   
   const [imageFile, setImageFile] = useState(null);
 
-  // Tự động lấy dữ liệu khi mở trang
+  // 👈 Tải danh sách POIs và dữ liệu quán cùng lúc
   useEffect(() => {
-    const fetchShop = async () => {
+    const fetchData = async () => {
       try {
+        // Tải danh sách POIs
+        const poisRes = await axios.get(`${API_BASE}/api/pois`);
+        setPois(poisRes.data.pois);
+
+        // Tải dữ liệu quán
         const res = await axios.get(`${API_BASE}/api/shopkeeper/verify/${code.trim()}`);
         const shop = res.data.shop;
         
-        // Tách giờ mở cửa
         let pStart = "08", pEnd = "21";
         if (shop.OpeningHours && shop.OpeningHours.includes(" - ")) {
           const parts = shop.OpeningHours.split(" - ");
@@ -44,6 +51,7 @@ export default function ShopkeeperEditPage() {
           descriptionVi: shop.DescriptionVi || "",
           openingHours: shop.OpeningHours || "08:00 - 21:00",
           phone: shop.Phone || "",
+          poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : "") // 👈 Gán PoiId hiện tại
         });
       } catch (err) {
         setError(err.response?.data?.error || "Mã không hợp lệ hoặc không tìm thấy quán.");
@@ -51,7 +59,7 @@ export default function ShopkeeperEditPage() {
         setLoading(false);
       }
     };
-    fetchShop();
+    fetchData();
   }, [code]);
 
   const handleUpdate = async (e) => {
@@ -102,6 +110,21 @@ export default function ShopkeeperEditPage() {
         {error && <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-6 text-center">{error}</div>}
 
         <form onSubmit={handleUpdate} className="space-y-4">
+          
+          {/* 👈 THÊM DROPDOWN CHỌN POI Ở ĐÂY */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Thuộc địa điểm (POI)</label>
+            <select 
+              value={formData.poiId} 
+              onChange={(e) => setFormData({...formData, poiId: e.target.value})} 
+              className="w-full border p-3 rounded-lg bg-white"
+            >
+              {pois.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">Tên cửa hàng</label>
             <input required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full border p-3 rounded-lg" />

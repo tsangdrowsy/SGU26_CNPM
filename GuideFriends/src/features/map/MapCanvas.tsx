@@ -12,6 +12,7 @@ type MapCanvasProps = {
   onReady: () => void;
   onPoiSelected: (poi: POI) => void;
   onMapTap: () => void;
+  panToLocation?: { latitude: number; longitude: number } | null;
 };
 
 function buildHtml(
@@ -52,7 +53,7 @@ function buildHtml(
       }
     }
 
-    var map = L.map("map", { zoomControl: false, touchZoom: true,  bounceAtZoomLimits: false }).setView(
+    var map = L.map("map", { zoomControl: false, touchZoom: true, bounceAtZoomLimits: false }).setView(
       [CENTER.latitude, CENTER.longitude], 17
     );
 
@@ -88,7 +89,6 @@ function buildHtml(
     var userMarker = null;
     var gotUser = false;
 
-    // 🎯 Called from React Native on every GPS update
     window.__setUser = function (lat, lng, acc) {
       if (!userMarker) {
         userMarker = L.circleMarker([lat, lng], {
@@ -102,7 +102,6 @@ function buildHtml(
         userMarker.setLatLng([lat, lng]);
       }
       
-      // 🎯 Snap to user on the VERY FIRST GPS fix
       if (!gotUser) {
         gotUser = true;
         map.setView([lat, lng], 17);
@@ -113,11 +112,15 @@ function buildHtml(
       if (dir > 0) { map.zoomIn(); } else { map.zoomOut(); }
     };
 
-    // 🎯 NEW: Snap back to live GPS location
     window.__locateMe = function() {
       if (userMarker) {
         map.flyTo(userMarker.getLatLng(), 17, { duration: 0.5 });
       }
+    };
+
+    // 👈 Đưa hàm panTo vào trong chuỗi HTML
+    window.__panTo = function(lat, lng) {
+      map.flyTo([lat, lng], 18, { duration: 1 });
     };
   </script>
 </body>
@@ -132,11 +135,9 @@ export default function MapCanvas({
   onReady,
   onPoiSelected,
   onMapTap,
+  panToLocation,
 }: MapCanvasProps) {
   const webRef = useRef<WebView>(null);
-
-  // 🎯 FIX: Lock the initial center in a ref. 
-  // This prevents the WebView from reloading/flickering every time GPS updates the `center` prop.
   const initialCenter = useRef(center);
   const html = useMemo(() => buildHtml(pois, initialCenter.current), [pois]);
 
@@ -153,13 +154,20 @@ export default function MapCanvas({
     webRef.current?.injectJavaScript(js);
   }, [userLocation]);
 
+  // 👈 Thêm useEffect để hứng lệnh bay map từ React Native
+  useEffect(() => {
+    if (panToLocation) {
+      const js = `window.__panTo && window.__panTo(${panToLocation.latitude}, ${panToLocation.longitude}); true;`;
+      webRef.current?.injectJavaScript(js);
+    }
+  }, [panToLocation]);
+
   const zoomBy = (dir: 1 | -1) => {
     webRef.current?.injectJavaScript(
       "window.__zoom && window.__zoom(" + dir + "); true;"
     );
   };
 
-  // 🎯 NEW: Trigger the locate me function inside Leaflet
   const locateMe = () => {
     webRef.current?.injectJavaScript(
       "window.__locateMe && window.__locateMe(); true;"
@@ -203,7 +211,6 @@ export default function MapCanvas({
           <Text style={styles.zoomBtnText}>−</Text>
         </TouchableOpacity>
 
-        {/* 🎯 NEW: Locate Me Button */}
         <TouchableOpacity
           style={[styles.zoomBtn, styles.locateBtn]}
           onPress={locateMe}
@@ -242,7 +249,7 @@ const styles = StyleSheet.create({
   },
   zoomBtnText: { fontSize: 22, fontWeight: "700", color: "#374151" },
   locateBtn: {
-    marginTop: 16, // Visually separate it from the zoom controls
+    marginTop: 16,
   },
   locateBtnText: {
     fontSize: 20,

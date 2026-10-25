@@ -11,6 +11,7 @@ type MapCanvasProps = {
   onReady: () => void;
   onPoiSelected: (poi: POI) => void;
   onMapTap: () => void;
+  panToLocation?: { latitude: number; longitude: number } | null; // 👈 Thêm prop
 };
 
 function buildHtml(
@@ -110,6 +111,11 @@ function buildHtml(
       if (dir > 0) { map.zoomIn(); } else { map.zoomOut(); }
     };
 
+    // 👈 Thêm hàm panTo vào iframe
+    window.__panTo = function (lat, lng) {
+      map.flyTo([lat, lng], 18, { duration: 1 });
+    };
+
     // Receive commands from the React parent
     window.addEventListener("message", function (event) {
       try {
@@ -118,6 +124,8 @@ function buildHtml(
           window.__setUser(data.lat, data.lng, data.acc);
         } else if (data.type === "zoom") {
           window.__zoom(data.dir);
+        } else if (data.type === "panTo") { // 👈 Nhận lệnh panTo
+          window.__panTo(data.lat, data.lng);
         }
       } catch (e) {}
     });
@@ -140,10 +148,11 @@ export default function MapCanvas({
   onReady,
   onPoiSelected,
   onMapTap,
+  panToLocation, // 👈 Nhận prop
 }: MapCanvasProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestUserRef = useRef<UserLocation | null>(userLocation);
-  latestUserRef.current = userLocation; // always current for the "ready" handler
+  latestUserRef.current = userLocation;
 
   const html = useMemo(() => buildHtml(pois, center), [pois, center]);
 
@@ -154,7 +163,6 @@ export default function MapCanvas({
         const data = JSON.parse(event.data);
         if (data.type === "ready") {
           onReady();
-          // If we already have a fix, push it in now that the iframe is live
           const cur = latestUserRef.current;
           if (cur && iframeRef.current?.contentWindow) {
             iframeRef.current.contentWindow.postMessage(
@@ -174,7 +182,7 @@ export default function MapCanvas({
           onMapTap();
         }
       } catch {
-        // ignore non-JSON messages
+        // ignore
       }
     };
     window.addEventListener("message", handler);
@@ -194,6 +202,20 @@ export default function MapCanvas({
       "*"
     );
   }, [userLocation]);
+
+  // 👈 Lắng nghe sự thay đổi của panToLocation và gửi lệnh vào iframe
+  useEffect(() => {
+    if (panToLocation && iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({
+          type: "panTo",
+          lat: panToLocation.latitude,
+          lng: panToLocation.longitude,
+        }),
+        "*"
+      );
+    }
+  }, [panToLocation]);
 
   const zoomBy = (dir: 1 | -1) => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -216,7 +238,6 @@ export default function MapCanvas({
         title="Leaflet Map"
       />
 
-      {/* Native zoom buttons (same as the native component) */}
       <View style={styles.zoomWrap}>
         <TouchableOpacity
           style={styles.zoomBtn}

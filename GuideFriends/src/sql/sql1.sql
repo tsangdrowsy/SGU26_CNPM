@@ -137,8 +137,8 @@ VALUES
 -- Insert Shopkeepers
 INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, ImageUrl, OpeningHours, Phone, ClaimCode, IsClaimed, Status)
 VALUES
-('shop_001', 'poi_001', N'Quán Chay Sơn Trà', N'Phục vụ các món chay thanh đạm, không gian yên tĩnh, view nhìn ra biển Đà Nẵng.', 'https://example.com/chay.jpg', '08:00 - 21:00', '0905123456', 'CLAIM-CHAY-01', 1,pending),
-('shop_002', 'poi_002', N'Tiệm Lưu Niệm Phật Giáo', N'Chuyên cung cấp vòng tay gỗ, tượng gỗ, nhang trầm và đồ thờ cúng.', 'https://example.com/luuniem.jpg', '07:00 - 18:00', '0905654321', 'CLAIM-LUU-02', 0, pending);
+('shop_001', 'poi_001', N'Quán Chay Sơn Trà', N'Phục vụ các món chay thanh đạm, không gian yên tĩnh, view nhìn ra biển Đà Nẵng.', 'https://example.com/chay.jpg', '08:00 - 21:00', '0905123456', 'CLAIM-CHAY-01', 1,'pending'),
+('shop_002', 'poi_002', N'Tiệm Lưu Niệm Phật Giáo', N'Chuyên cung cấp vòng tay gỗ, tượng gỗ, nhang trầm và đồ thờ cúng.', 'https://example.com/luuniem.jpg', '07:00 - 18:00', '0905654321', 'CLAIM-LUU-02', 0, 'pending');
 
 -- Insert Mock Token (Hết hạn sau 24h kể từ lúc chạy script)
 INSERT INTO UnlockTokens (Token, CreatedByClerkId, ExpiresAt)
@@ -178,3 +178,12 @@ SET PasswordHash = '$2b$10$0DgiUhK4vhuo49Va8YXqp.d6e3EluNtgku/bMjRJ19nU8toToTikO
 WHERE Username = 'admin';
 USE GuideFriendsDB;
 GO
+
+
+UPDATE Shopkeepers 
+SET Latitude = 16.12350, Longitude = 108.23460 
+WHERE Id = 'shop_001';
+
+UPDATE Shopkeepers 
+SET Latitude = 16.12380, Longitude = 108.23480 
+WHERE Id = 'shop_002';

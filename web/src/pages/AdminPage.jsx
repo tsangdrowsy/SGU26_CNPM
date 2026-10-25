@@ -10,7 +10,8 @@ export default function AdminPage() {
     const adminName = localStorage.getItem("admin_name") || "Admin";
 
     // --- KHAI BÁO STATE ---
-    const [stats, setStats] = useState({ totalTokens: 0, activeTokens: 0, totalPois: 0 });
+    // 👈 Sửa activeTokens thành activeUsers
+    const [stats, setStats] = useState({ totalTokens: 0, activeUsers: 0, totalPois: 0 });
     const [tokens, setTokens] = useState([]);
     const [pois, setPois] = useState([]);
     const [allShops, setAllShops] = useState([]);
@@ -112,7 +113,7 @@ export default function AdminPage() {
         }
     };
 
-    // 👈 HÀM DUYỆT QUÁN (HỖ TRỢ CẢ TIỀN MẶT VÀ VNPAY KẸT)
+    // HÀM DUYỆT QUÁN
     const handleApproveShop = async (shop) => {
         const isVnpay = shop.Status === 'pending_vnpay';
         const confirmMsg = isVnpay 
@@ -151,8 +152,9 @@ export default function AdminPage() {
                     <p className="text-4xl font-bold text-blue-600 mt-2">{stats.totalTokens || 0}</p>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-sm text-gray-500 font-medium">Token đang hoạt động</p>
-                    <p className="text-4xl font-bold text-green-600 mt-2">{stats.activeTokens || 0}</p>
+                    <p className="text-sm text-gray-500 font-medium">Người dùng đang hoạt động</p>
+                    {/* 👈 Sửa hiển thị thành activeUsers */}
+                    <p className="text-4xl font-bold text-green-600 mt-2">{stats.activeUsers || 0}</p>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500 font-medium">Tổng số Địa điểm (POI)</p>
@@ -260,14 +262,11 @@ export default function AdminPage() {
                                 <tr key={shop.Id}>
                                     <td className="p-3 font-medium">{shop.Name}</td>
                                     <td className="p-3">{shop.Phone}</td>
-                                    
-                                    {/* 👈 HIỂN THỊ HÌNH THỨC THANH TOÁN */}
                                     <td className="p-3">
                                         <span className={`px-2 py-1 rounded text-xs font-bold ${shop.Status === 'pending_vnpay' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                                             {shop.Status === 'pending_vnpay' ? 'VNPAY (Chờ đối soát)' : 'Tiền mặt'}
                                         </span>
                                     </td>
-
                                     <td className="p-3">
                                         <button 
                                             onClick={() => handleApproveShop(shop)} 

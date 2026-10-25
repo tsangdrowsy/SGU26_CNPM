@@ -9,6 +9,8 @@ export interface Shopkeeper {
   imageUrl?: string;
   openingHours?: string;
   phone?: string;
+  latitude?: number;  
+  longitude?: number;
 }
 
 export interface POILocation {

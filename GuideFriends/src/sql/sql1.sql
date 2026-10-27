@@ -101,7 +101,8 @@ ALTER TABLE Shopkeepers ADD Status VARCHAR(20) DEFAULT 'pending';
 ALTER TABLE Shopkeepers ADD Latitude DECIMAL(9, 6);
 ALTER TABLE Shopkeepers ADD Longitude DECIMAL(9, 6);
 GO
-
+ALTER TABLE POIs ALTER COLUMN ImageUrl NVARCHAR(MAX);
+ALTER TABLE Shopkeepers ALTER COLUMN ImageUrl NVARCHAR(MAX);
 -- Thêm cột Source nếu chưa có (bỏ qua nếu đã thêm từ trước)
 ALTER TABLE UnlockTokens ADD Source VARCHAR(20) DEFAULT 'clerk';
 
@@ -142,6 +143,19 @@ VALUES
 ('shop_001', 'poi_001', N'Quán Chay Sơn Trà', N'Phục vụ các món chay thanh đạm, không gian yên tĩnh, view nhìn ra biển Đà Nẵng.', 'https://example.com/chay.jpg', '08:00 - 21:00', '0905123456', 'CLAIM-CHAY-01', 1,'pending'),
 ('shop_002', 'poi_002', N'Tiệm Lưu Niệm Phật Giáo', N'Chuyên cung cấp vòng tay gỗ, tượng gỗ, nhang trầm và đồ thờ cúng.', 'https://example.com/luuniem.jpg', '07:00 - 18:00', '0905654321', 'CLAIM-LUU-02', 0, 'pending');
 
+INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, ImageUrl, OpeningHours, Phone, ClaimCode, IsClaimed, Status)
+VALUES
+-- Thêm 1 quán nữa cho poi_001 (Chùa Linh Ứng) để đủ 2 quán
+('shop_003', 'poi_001', N'Quán Nước Mía Cô Ba', N'Nước mía tươi mát lạnh, giải nhiệt mùa hè, có kèm ghế đá ngồi nghỉ chân.', 'https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?q=80&w=800&auto=format&fit=crop', '07:00 - 18:00', '0905123987', 'CLAIM-MIA-03', 1, 'pending'),
+
+-- Thêm 1 quán nữa cho poi_002 (Tượng Quán Thế Âm) để đủ 2 quán
+('shop_004', 'poi_002', N'Tiệm Trà Thảo Mộc', N'Bán các loại trà hoa cúc, trà sen, trà gừng tốt cho sức khỏe, phù hợp làm quà biếu.', 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?q=80&w=800&auto=format&fit=crop', '08:00 - 17:00', '0905876543', 'CLAIM-TRA-04', 1, 'pending'),
+
+-- Thêm 2 quán cho poi_003 (Cổng Tam Quan) vì hiện tại poi này chưa có quán nào
+('shop_005', 'poi_003', N'Tiệm Bánh Mì Chay Từ Tâm', N'Bánh mì chay nóng hổi, giòn rụm, nhân nấm và đậu hũ sốt nước tương đặc biệt.', 'https://images.unsplash.com/photo-1628194223589-335b0a80850b?q=80&w=800&auto=format&fit=crop', '06:00 - 11:00', '0905112233', 'CLAIM-BANHMI-05', 0, 'pending'),
+
+('shop_006', 'poi_003', N'Quán Cà Phê Sân Vườn', N'Không gian rộng rãi, nhiều cây xanh, thích hợp ngồi nghỉ ngơi sau khi đi bộ tham quan.', 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=800&auto=format&fit=crop', '06:30 - 22:00', '0905998877', 'CLAIM-CAFE-06', 1, 'pending');
+
 -- Insert Mock Token (Hết hạn sau 24h kể từ lúc chạy script)
 INSERT INTO UnlockTokens (Token, CreatedByClerkId, ExpiresAt)
 SELECT 
@@ -173,6 +187,9 @@ BEGIN
     END
 END
 GO
+
+
+
 USE GuideFriendsDB;
 GO
 UPDATE Admins 

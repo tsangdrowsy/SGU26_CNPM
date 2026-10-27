@@ -23,11 +23,18 @@ const COLLAPSED_HEIGHT = 250;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75;
 const DRAG_THRESHOLD = 50;
 
-// 👈 1. ĐƯA COMPONENT RA NGOÀI ĐỂ TRÁNH LỖI GIẬT LAG & RESET STATE
+// Hàm hỗ trợ tạo URL ảnh an toàn và vượt qua Ngrok
+const getSafeImageUrl = (imgPath?: string) => {
+  if (!imgPath) return "https://via.placeholder.com/400x200?text=No+Image";
+  const fullUrl = imgPath.startsWith("http") ? imgPath : `${API_BASE}${imgPath}`;
+  // Thêm query param để buộc Ngrok nhả ảnh ra
+  return `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}ngrok-skip-browser-warning=true`;
+};
+
 const ImageCarousel = ({ imageUrls }: { imageUrls?: string[] }) => {
   const images = imageUrls && imageUrls.length > 0
     ? imageUrls
-    : ["https://via.placeholder.com/400x200?text=No+Image"];
+    : [undefined];
 
   return (
     <ScrollView
@@ -37,14 +44,14 @@ const ImageCarousel = ({ imageUrls }: { imageUrls?: string[] }) => {
       style={{ width: "100%", height: 180, marginVertical: 16 }}
     >
       {images.map((img, idx) => {
-        // Tự động nhận diện link ngoài (http) hay link local (/uploads)
-        const uri = img.startsWith("http") ? img : `${API_BASE}${img}`;
+        // 👈 Giảm chiều rộng xuống SCREEN_WIDTH - 64 để vừa vặn với Card
         return (
           <Image
             key={idx}
-            source={{ uri }}
-            style={{ width: SCREEN_WIDTH - 32, height: 180, borderRadius: 16 }}
+            source={{ uri: getSafeImageUrl(img) }}
+            style={{ width: SCREEN_WIDTH - 64, height: 180, borderRadius: 16 }}
             resizeMode="cover"
+            onError={(e) => console.log("Lỗi tải ảnh POI:", e.nativeEvent.error)}
           />
         );
       })}
@@ -72,7 +79,6 @@ export default function MapScreen() {
   const [ttsState, setTtsState] = useState<"idle" | "preparing" | "speaking">("idle");
   const [currentLanguage, setCurrentLanguage] = useState<LanguageCode>("en");
 
-  // --- STATE CHO DỊCH THUẬT & QUÁN ---
   const [translatedDesc, setTranslatedDesc] = useState({ short: "", full: "" });
   const [isTranslating, setIsTranslating] = useState(false);
 
@@ -83,7 +89,6 @@ export default function MapScreen() {
 
   const displayPoi = selectedPoi ?? nearbyPoi;
 
-  // --- ANIMATION CHO BOTTOM SHEET ---
   const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const currentHeightRef = useRef(COLLAPSED_HEIGHT);
 
@@ -115,7 +120,6 @@ export default function MapScreen() {
     else snapTo(COLLAPSED_HEIGHT);
   }, [selectedPoi, selectedShop]);
 
-  // --- TỰ ĐỘNG DỊCH POI ---
   useEffect(() => {
     if (!displayPoi) { setTranslatedDesc({ short: "", full: "" }); return; }
     let isMounted = true;
@@ -128,7 +132,6 @@ export default function MapScreen() {
     return () => { isMounted = false; };
   }, [displayPoi, currentLanguage]);
 
-  // --- XỬ LÝ KHI BẤM VÀO QUÁN ---
   const handleShopClick = async (shop: Shopkeeper) => {
     setSelectedShop(shop);
     if (shop.latitude && shop.longitude) {
@@ -311,7 +314,6 @@ export default function MapScreen() {
               
               {selectedShop ? (
                 <View>
-                  {/* 👈 SỬA THÀNH imageUrls */}
                   <ImageCarousel imageUrls={selectedShop.imageUrls} />
                   {isTranslatingShop ? (
                     <ActivityIndicator size="large" color={colors.accent} style={{ marginTop: 20 }} />
@@ -325,7 +327,6 @@ export default function MapScreen() {
                     <Text style={styles.cardDescription}>{translatedDesc.short || displayPoi.shortDescriptionVi}</Text>
                     {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}m</Text>}
 
-                    {/* 👈 SỬA THÀNH imageUrls */}
                     <ImageCarousel imageUrls={displayPoi.imageUrls} />
 
                     <View style={styles.divider} />
@@ -339,14 +340,10 @@ export default function MapScreen() {
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 10 }}>
                           {displayPoi.shopkeepers.map((shop) => (
                             <TouchableOpacity key={shop.id} style={styles.shopHorizontalCard} onPress={() => handleShopClick(shop)} activeOpacity={0.8}>
-                              {/* 👈 LẤY ẢNH ĐẦU TIÊN TRONG MẢNG */}
                               <Image
-                                source={{ 
-                                  uri: shop.imageUrls?.[0] 
-                                    ? (shop.imageUrls[0].startsWith("http") ? shop.imageUrls[0] : `${API_BASE}${shop.imageUrls[0]}`)
-                                    : "https://via.placeholder.com/150" 
-                                }}
+                                source={{ uri: getSafeImageUrl(shop.imageUrls?.[0]) }}
                                 style={styles.shopImage}
+                                onError={(e) => console.log("Lỗi tải ảnh Shop:", e.nativeEvent.error)}
                               />
                               <View style={styles.shopTextWrap}>
                                 <Text style={styles.shopName} numberOfLines={1}>{shop.name}</Text>

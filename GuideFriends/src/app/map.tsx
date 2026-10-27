@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Animated, AppState, Dimensions, Linking, PanResponder,
-  ScrollView, StyleSheet, Text, TouchableOpacity, View, Image // 👈 Thêm Image
+  ScrollView, StyleSheet, Text, TouchableOpacity, View, Image //  Thêm Image
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -17,6 +17,7 @@ import MapCanvas from "../features/map/MapCanvas";
 import { UserLocation } from "../features/map/types";
 import { translateText, translateBatch } from "../services/translationService";
 import { speak, stopSpeaking } from "../services/ttsService";
+
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const COLLAPSED_HEIGHT = 250;
@@ -57,7 +58,33 @@ export default function MapScreen() {
   // --- ANIMATION CHO BOTTOM SHEET ---
   const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const currentHeightRef = useRef(COLLAPSED_HEIGHT);
+  const SCREEN_WIDTH = Dimensions.get("window").width;
 
+  // Component Thanh trượt ảnh
+  const ImageCarousel = ({ imageUrl }: { imageUrl?: string }) => {
+    // Tạo giả lập 3 ảnh để bạn thấy hiệu ứng vuốt
+    const images = imageUrl
+      ? [imageUrl, imageUrl, imageUrl]
+      : ["https://via.placeholder.com/400x200?text=No+Image"];
+
+    return (
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        style={{ width: "100%", height: 180, marginVertical: 16 }}
+      >
+        {images.map((img, idx) => (
+          <Image
+            key={idx}
+            source={{ uri: img.startsWith("http") && !img.includes("placeholder") ? `${API_BASE}${img}` : img }}
+            style={{ width: SCREEN_WIDTH - 32, height: 180, borderRadius: 16 }}
+            resizeMode="cover"
+          />
+        ))}
+      </ScrollView>
+    );
+  };
   useEffect(() => {
     const id = animatedHeight.addListener(({ value }) => { currentHeightRef.current = value; });
     return () => animatedHeight.removeListener(id);
@@ -221,6 +248,7 @@ export default function MapScreen() {
           panToLocation={panToLocation} // 👈 Truyền lệnh bay map
           onReady={() => setMapReady(true)}
           onPoiSelected={(poi) => { setSelectedPoi(poi); setSelectedShop(null); }}
+          onShopSelected={(shop) => handleShopClick(shop)}
           onMapTap={handleMapTap}
         />
 
@@ -295,6 +323,8 @@ export default function MapScreen() {
               {/* === CHẾ ĐỘ XEM SHOP === */}
               {selectedShop ? (
                 <View>
+                  <ImageCarousel imageUrl={selectedShop.imageUrl} />
+
                   {isTranslatingShop ? (
                     <ActivityIndicator size="large" color={colors.accent} style={{ marginTop: 20 }} />
                   ) : (
@@ -308,11 +338,13 @@ export default function MapScreen() {
                     <Text style={styles.cardDescription}>{translatedDesc.short || displayPoi.shortDescriptionVi}</Text>
                     {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}m</Text>}
 
+                      <ImageCarousel imageUrl={displayPoi.imageUrl} />
+
                     <View style={styles.divider} />
                     <Text style={styles.sectionTitle}>Details</Text>
                     <Text style={styles.fullDescription}>{translatedDesc.full || displayPoi.fullDescriptionVi}</Text>
 
-                    {/* 👈 PHẦN HIỂN THỊ CÁC QUÁN CUỘN NGANG */}
+                    {/*  PHẦN HIỂN THỊ CÁC QUÁN CUỘN NGANG */}
                     {displayPoi.shopkeepers && displayPoi.shopkeepers.length > 0 && (
                       <>
                         <View style={styles.divider} />
@@ -377,7 +409,7 @@ const styles = StyleSheet.create({
   badgeOrange: { backgroundColor: colors.softAccent },
   badgeGreen: { backgroundColor: "#F0FDF4" },
   badgeText: { fontSize: 12, fontWeight: "700", color: colors.accentDark },
-  badgeTextOrange: { color: colors.accentDark },  
+  badgeTextOrange: { color: colors.accentDark },
   badgeTextGreen: { color: "#16A34A" },
 
   cardActions: { flexDirection: "row", gap: 12 },

@@ -1,7 +1,7 @@
 // src/features/map/MapCanvas.web.tsx
 import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { POI } from "../../types/poi";
+import { POI, Shopkeeper } from "../../types/poi"; // 👈 Thêm Shopkeeper
 import { UserLocation } from "./types";
 
 type MapCanvasProps = {
@@ -10,20 +10,23 @@ type MapCanvasProps = {
   userLocation: UserLocation | null;
   onReady: () => void;
   onPoiSelected: (poi: POI) => void;
+  onShopSelected: (shop: Shopkeeper) => void; // 👈 Thêm prop
   onMapTap: () => void;
-  panToLocation?: { latitude: number; longitude: number } | null; // 👈 Thêm prop
+  panToLocation?: { latitude: number; longitude: number } | null;
 };
 
 function buildHtml(
   pois: POI[],
   center: { latitude: number; longitude: number }
 ): string {
+  // 👈 Truyền mảng shopkeepers xuống
   const poisPayload = pois.map((p) => ({
     id: p.id,
     name: p.name,
     latitude: p.location.latitude,
     longitude: p.location.longitude,
     radiusMeters: p.radiusMeters,
+    shopkeepers: p.shopkeepers || [],
   }));
 
   return `
@@ -46,7 +49,6 @@ function buildHtml(
     var POIS = ${JSON.stringify(poisPayload)};
     var CENTER = ${JSON.stringify(center)};
 
-    // Send messages back to the React parent (web bridge)
     function send(msg) {
       try {
         window.parent.postMessage(JSON.stringify(msg), "*");
@@ -63,25 +65,35 @@ function buildHtml(
     }).addTo(map);
 
     POIS.forEach(function (p) {
+      // Vẽ POI (Màu cam)
       L.circle([p.latitude, p.longitude], {
-        radius: p.radiusMeters,
-        color: "#F97316",
-        weight: 1,
-        opacity: 0.6,
-        fillColor: "#F97316",
-        fillOpacity: 0.12
+        radius: p.radiusMeters, color: "#F97316", weight: 1, opacity: 0.6, fillColor: "#F97316", fillOpacity: 0.12
       }).addTo(map);
 
       var m = L.circleMarker([p.latitude, p.longitude], {
-        radius: 9,
-        color: "#FFFFFF",
-        weight: 2,
-        fillColor: "#F97316",
-        fillOpacity: 1
+        radius: 9, color: "#FFFFFF", weight: 2, fillColor: "#F97316", fillOpacity: 1
       }).addTo(map);
 
       m.bindTooltip(p.name, { direction: "top", offset: [0, -8] });
       m.on("click", function () { send({ type: "poiSelected", id: p.id }); });
+
+      // 👈 Vẽ Shopkeepers (Màu xanh lá)
+      if (p.shopkeepers && p.shopkeepers.length > 0) {
+        p.shopkeepers.forEach(function (s) {
+          if (s.latitude && s.longitude) {
+            var sMarker = L.circleMarker([s.latitude, s.longitude], {
+              radius: 6, color: "#FFFFFF", weight: 1.5, fillColor: "#10B981", fillOpacity: 1
+            }).addTo(map);
+            
+            sMarker.bindTooltip(s.name, { direction: "top", offset: [0, -6] });
+            sMarker.on("click", function (e) { 
+              // Ngăn chặn sự kiện click lan ra map (tránh đóng popup)
+              L.DomEvent.stopPropagation(e);
+              send({ type: "shopSelected", shop: s }); 
+            });
+          }
+        });
+      }
     });
 
     map.on("click", function () { send({ type: "mapTap" }); });
@@ -92,26 +104,18 @@ function buildHtml(
     window.__setUser = function (lat, lng, acc) {
       if (!userMarker) {
         userMarker = L.circleMarker([lat, lng], {
-          radius: 8,
-          color: "#FFFFFF",
-          weight: 3,
-          fillColor: "#2563EB",
-          fillOpacity: 1
+          radius: 8, color: "#FFFFFF", weight: 3, fillColor: "#2563EB", fillOpacity: 1
         }).addTo(map);
       } else {
         userMarker.setLatLng([lat, lng]);
       }
-      if (!gotUser) {
-        gotUser = true;
-        map.setView([lat, lng], 17);
-      }
+      if (!gotUser) { gotUser = true; map.setView([lat, lng], 17); }
     };
 
     window.__zoom = function (dir) {
       if (dir > 0) { map.zoomIn(); } else { map.zoomOut(); }
     };
 
-    // 👈 Thêm hàm panTo vào iframe
     window.__panTo = function (lat, lng) {
       map.flyTo([lat, lng], 18, { duration: 1 });
     };
@@ -124,13 +128,12 @@ function buildHtml(
           window.__setUser(data.lat, data.lng, data.acc);
         } else if (data.type === "zoom") {
           window.__zoom(data.dir);
-        } else if (data.type === "panTo") { // 👈 Nhận lệnh panTo
+        } else if (data.type === "panTo") {
           window.__panTo(data.lat, data.lng);
         }
       } catch (e) {}
     });
 
-    // Notify parent that the map is ready
     function sendReady() { send({ type: "ready" }); }
     if (document.readyState === "complete") { sendReady(); }
     else { window.addEventListener("load", sendReady); }
@@ -147,8 +150,9 @@ export default function MapCanvas({
   userLocation,
   onReady,
   onPoiSelected,
+  onShopSelected, // 👈 Nhận prop
   onMapTap,
-  panToLocation, // 👈 Nhận prop
+  panToLocation,
 }: MapCanvasProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestUserRef = useRef<UserLocation | null>(userLocation);
@@ -166,18 +170,15 @@ export default function MapCanvas({
           const cur = latestUserRef.current;
           if (cur && iframeRef.current?.contentWindow) {
             iframeRef.current.contentWindow.postMessage(
-              JSON.stringify({
-                type: "setUser",
-                lat: cur.latitude,
-                lng: cur.longitude,
-                acc: cur.accuracy ?? 15,
-              }),
+              JSON.stringify({ type: "setUser", lat: cur.latitude, lng: cur.longitude, acc: cur.accuracy ?? 15 }),
               "*"
             );
           }
         } else if (data.type === "poiSelected") {
           const poi = pois.find((p) => p.id === data.id);
           if (poi) onPoiSelected(poi);
+        } else if (data.type === "shopSelected") {
+          onShopSelected(data.shop); // 👈 Bắt sự kiện bấm shop
         } else if (data.type === "mapTap") {
           onMapTap();
         }
@@ -187,7 +188,7 @@ export default function MapCanvas({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [pois, onReady, onPoiSelected, onMapTap]);
+  }, [pois, onReady, onPoiSelected, onShopSelected, onMapTap]);
 
   // Push GPS updates into the iframe
   useEffect(() => {
@@ -203,7 +204,7 @@ export default function MapCanvas({
     );
   }, [userLocation]);
 
-  // 👈 Lắng nghe sự thay đổi của panToLocation và gửi lệnh vào iframe
+  // Lắng nghe panToLocation
   useEffect(() => {
     if (panToLocation && iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.postMessage(
@@ -218,10 +219,7 @@ export default function MapCanvas({
   }, [panToLocation]);
 
   const zoomBy = (dir: 1 | -1) => {
-    iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ type: "zoom", dir }),
-      "*"
-    );
+    iframeRef.current?.contentWindow?.postMessage(JSON.stringify({ type: "zoom", dir }), "*");
   };
 
   return (
@@ -229,28 +227,14 @@ export default function MapCanvas({
       <iframe
         ref={iframeRef}
         srcDoc={html}
-        style={{
-          border: "none",
-          width: "100%",
-          height: "100%",
-          display: "block",
-        }}
+        style={{ border: "none", width: "100%", height: "100%", display: "block" }}
         title="Leaflet Map"
       />
-
       <View style={styles.zoomWrap}>
-        <TouchableOpacity
-          style={styles.zoomBtn}
-          onPress={() => zoomBy(1)}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(1)} activeOpacity={0.8}>
           <Text style={styles.zoomBtnText}>+</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.zoomBtn}
-          onPress={() => zoomBy(-1)}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(-1)} activeOpacity={0.8}>
           <Text style={styles.zoomBtnText}>−</Text>
         </TouchableOpacity>
       </View>
@@ -259,27 +243,7 @@ export default function MapCanvas({
 }
 
 const styles = StyleSheet.create({
-  zoomWrap: {
-    position: "absolute",
-    right: 12,
-    top: "38%",
-    gap: 8,
-    zIndex: 10,
-  },
-  zoomBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-  },
-  zoomBtnText: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#374151",
-  },
+  zoomWrap: { position: "absolute", right: 12, top: "38%", gap: 8, zIndex: 10 },
+  zoomBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E5E7EB", boxShadow: "0 2px 6px rgba(0,0,0,0.15)" },
+  zoomBtnText: { fontSize: 22, fontWeight: "700", color: "#374151" },
 });

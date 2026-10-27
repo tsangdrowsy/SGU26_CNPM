@@ -23,8 +23,8 @@ export default function AdminPage() {
     });
 
     // 👈 STATE CHO QUẢN LÝ ẢNH
-    const [existingImages, setExistingImages] = useState([]); // Ảnh cũ đang có trong DB
-    const [newImageFiles, setNewImageFiles] = useState([]);   // File ảnh mới chọn
+    const [existingImages, setExistingImages] = useState([]);
+    const [newImageFiles, setNewImageFiles] = useState([]);
 
     const loadData = async () => {
         try {
@@ -75,12 +75,11 @@ export default function AdminPage() {
             longitude: poi.location?.longitude || "",
             radiusMeters: poi.radiusMeters || 20,
         });
-        setExistingImages(poi.imageUrls || []); // Load ảnh cũ vào state
+        setExistingImages(poi.imageUrls || []);
         setNewImageFiles([]);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // 👈 HÀM XOÁ ẢNH
     const removeExistingImage = (index) => {
         const updated = [...existingImages];
         updated.splice(index, 1);
@@ -99,7 +98,7 @@ export default function AdminPage() {
 
         const data = new FormData();
         Object.keys(formData).forEach(key => data.append(key, formData[key]));
-
+        
         // 👈 Gửi mảng ảnh cũ được giữ lại
         data.append("keptImages", JSON.stringify(existingImages));
 
@@ -227,7 +226,38 @@ export default function AdminPage() {
                         )}
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* ... (Các input name, lat, lng, desc giữ nguyên) ... */}
+                        
+                        {/* 👈 CÁC Ô NHẬP LIỆU ĐÃ ĐƯỢC KHÔI PHỤC ĐẦY ĐỦ */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Tên địa điểm</label>
+                            <input required name="name" value={formData.name} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Vĩ độ (Lat)</label>
+                                <input required type="number" step="any" name="latitude" value={formData.latitude} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Kinh độ (Lng)</label>
+                                <input required type="number" step="any" name="longitude" value={formData.longitude} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả ngắn (Tiếng Việt)</label>
+                            <textarea required name="shortDescriptionVi" value={formData.shortDescriptionVi} onChange={handleInputChange} rows="2" className="w-full border p-2 rounded-lg" />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả đầy đủ (Dùng cho RAG)</label>
+                            <textarea required name="fullDescriptionVi" value={formData.fullDescriptionVi} onChange={handleInputChange} rows="3" className="w-full border p-2 rounded-lg" />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Bán kính kích hoạt (mét)</label>
+                            <input required type="number" name="radiusMeters" value={formData.radiusMeters} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
+                        </div>
 
                         {/* 👈 GIAO DIỆN QUẢN LÝ ẢNH MỚI */}
                         <div>
@@ -318,7 +348,6 @@ export default function AdminPage() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {pois.map((poi) => {
-                        // 👈 Lấy ảnh đầu tiên trong mảng imageUrls để hiển thị
                         const firstImg = poi.imageUrls?.[0];
                         return (
                             <div key={poi.id} className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition">

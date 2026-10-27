@@ -61,6 +61,7 @@ CREATE TABLE POIs (
     Longitude DECIMAL(9, 6) NOT NULL,
     RadiusMeters INT DEFAULT 20,
     ImageUrl NVARCHAR(500),
+    GalleryImages NVARCHAR(MAX),
     CreatedAt DATETIME2 DEFAULT GETUTCDATE()
 );
 GO
@@ -72,6 +73,7 @@ CREATE TABLE Shopkeepers (
     Name NVARCHAR(255) NOT NULL,
     DescriptionVi NVARCHAR(1000),
     ImageUrl NVARCHAR(500),
+    GalleryImages NVARCHAR(MAX),
     OpeningHours NVARCHAR(100),
     Phone NVARCHAR(20),
     ClaimCode NVARCHAR(50) UNIQUE, -- Magic link / Code để chủ quán claim (Flow 4)
@@ -131,30 +133,46 @@ VALUES
 ('admin', '$2a$10$1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h7j8k9l0m1n2o3p4q5r6s7t', N'Quản Trị Viên');
 
 -- Insert POIs
-INSERT INTO POIs (Id, Name, ShortDescriptionVi, FullDescriptionVi, Latitude, Longitude, RadiusMeters, ImageUrl)
+USE GuideFriendsDB;
+GO
+
+-- ==========================================
+-- 0. DỌN DẸP DỮ LIỆU CŨ (Xóa để insert lại cho sạch)
+-- ==========================================
+DELETE FROM Shopkeepers;
+DELETE FROM POIs;
+GO
+
+-- ==========================================
+-- 1. THÊM DỮ LIỆU MẪU CHO POIs (Mỗi POI có 3 ảnh)
+-- ==========================================
+INSERT INTO POIs (Id, Name, ShortDescriptionVi, FullDescriptionVi, Latitude, Longitude, RadiusMeters, ImageUrl, GalleryImages)
 VALUES
-('poi_001', N'Chùa Linh Ứng (Bãi Bụt)', N'Ngôi chùa nổi tiếng với tượng Quán Thế Âm cao nhất Việt Nam.', N'Chùa Linh Ứng tọa lạc trên bán đảo Sơn Trà, được khởi công xây dựng từ năm 2004 và hoàn thành sau 10 năm. Chùa không chỉ là nơi sinh hoạt tín ngưỡng mà còn là điểm đến du lịch nổi tiếng với kiến trúc độc đáo và cảnh quan hùng vĩ.', 16.12345, 108.23456, 30, 'https://example.com/linh-ung.jpg'),
-('poi_002', N'Tượng Quán Thế Âm', N'Tượng Phật bà Quán Âm cao 67m, tương đương tòa nhà 30 tầng.', N'Tượng Quán Thế Âm tại chùa Linh Ứng được xem là cao nhất Việt Nam. Bên trong lòng tượng có 17 tầng, mỗi tầng đều có bệ thờ tượng Phật hình Phật Tổ Như Lai.', 16.12385, 108.23490, 20, 'https://example.com/quan-am.jpg'),
-('poi_003', N'Cổng Tam Quan', N'Cổng vào chính của chùa với kiến trúc truyền thống.', N'Cổng Tam Quan là nơi đón tiếp du khách, mang đậm nét kiến trúc Phật giáo truyền thống với mái ngói cong vút và các họa tiết rồng phượng tinh xảo.', 16.12305, 108.23410, 15, 'https://example.com/cong.jpg');
+('poi_001', N'Chùa Linh Ứng (Bãi Bụt)', N'Ngôi chùa nổi tiếng với tượng Quán Thế Âm cao nhất Việt Nam.', N'Chùa Linh Ứng tọa lạc trên bán đảo Sơn Trà, được khởi công xây dựng từ năm 2004 và hoàn thành sau 10 năm. Chùa không chỉ là nơi sinh hoạt tín ngưỡng mà còn là điểm đến du lịch nổi tiếng với kiến trúc độc đáo và cảnh quan hùng vĩ.', 16.12345, 108.23456, 30, '/uploads/poi1_1.jpg', '["/uploads/poi1_1.jpg", "/uploads/poi1_2.jpg", "/uploads/poi1_3.jpg"]'),
 
--- Insert Shopkeepers
-INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, ImageUrl, OpeningHours, Phone, ClaimCode, IsClaimed, Status)
+('poi_002', N'Tượng Quán Thế Âm', N'Tượng Phật bà Quán Âm cao 67m, tương đương tòa nhà 30 tầng.', N'Tượng Quán Thế Âm tại chùa Linh Ứng được xem là cao nhất Việt Nam. Bên trong lòng tượng có 17 tầng, mỗi tầng đều có bệ thờ tượng Phật hình Phật Tổ Như Lai.', 16.12385, 108.23490, 20, '/uploads/poi2_1.jpg', '["/uploads/poi2_1.jpg", "/uploads/poi2_2.jpg", "/uploads/poi2_3.jpg"]'),
+
+('poi_003', N'Cổng Tam Quan', N'Cổng vào chính của chùa với kiến trúc truyền thống.', N'Cổng Tam Quan là nơi đón tiếp du khách, mang đậm nét kiến trúc Phật giáo truyền thống với mái ngói cong vút và các họa tiết rồng phượng tinh xảo.', 16.12305, 108.23410, 15, '/uploads/poi3_1.jpg', '["/uploads/poi3_1.jpg", "/uploads/poi3_2.jpg", "/uploads/poi3_3.jpg"]');
+GO
+
+-- ==========================================
+-- 2. THÊM DỮ LIỆU MẪU CHO SHOPKEEPERS (Mỗi Shop có 2 ảnh)
+-- (Tất cả đều ở trạng thái 'approved' để hiện lên app ngay)
+-- ==========================================
+INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, ImageUrl, GalleryImages, OpeningHours, Phone, ClaimCode, IsClaimed, Status)
 VALUES
-('shop_001', 'poi_001', N'Quán Chay Sơn Trà', N'Phục vụ các món chay thanh đạm, không gian yên tĩnh, view nhìn ra biển Đà Nẵng.', 'https://example.com/chay.jpg', '08:00 - 21:00', '0905123456', 'CLAIM-CHAY-01', 1,'pending'),
-('shop_002', 'poi_002', N'Tiệm Lưu Niệm Phật Giáo', N'Chuyên cung cấp vòng tay gỗ, tượng gỗ, nhang trầm và đồ thờ cúng.', 'https://example.com/luuniem.jpg', '07:00 - 18:00', '0905654321', 'CLAIM-LUU-02', 0, 'pending');
+-- Quán thuộc POI 1
+('shop_001', 'poi_001', N'Quán Chay Sơn Trà', N'Phục vụ các món chay thanh đạm, không gian yên tĩnh, view nhìn ra biển Đà Nẵng.', '/uploads/shop1_1.jpg', '["/uploads/shop1_1.jpg", "/uploads/shop1_2.jpg"]', '08:00 - 21:00', '0905123456', 'CLAIM-CHAY-01', 1, 'approved'),
+('shop_002', 'poi_001', N'Tiệm Lưu Niệm Phật Giáo', N'Chuyên cung cấp vòng tay gỗ, tượng gỗ, nhang trầm và đồ thờ cúng.', '/uploads/shop2_1.jpg', '["/uploads/shop2_1.jpg", "/uploads/shop2_2.jpg"]', '07:00 - 18:00', '0905654321', 'CLAIM-LUU-02', 1, 'approved'),
 
-INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, ImageUrl, OpeningHours, Phone, ClaimCode, IsClaimed, Status)
-VALUES
--- Thêm 1 quán nữa cho poi_001 (Chùa Linh Ứng) để đủ 2 quán
-('shop_003', 'poi_001', N'Quán Nước Mía Cô Ba', N'Nước mía tươi mát lạnh, giải nhiệt mùa hè, có kèm ghế đá ngồi nghỉ chân.', 'https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?q=80&w=800&auto=format&fit=crop', '07:00 - 18:00', '0905123987', 'CLAIM-MIA-03', 1, 'pending'),
+-- Quán thuộc POI 2
+('shop_003', 'poi_002', N'Quán Nước Mía Cô Ba', N'Nước mía tươi mát lạnh, giải nhiệt mùa hè, có kèm ghế đá ngồi nghỉ chân.', '/uploads/shop3_1.jpg', '["/uploads/shop3_1.jpg", "/uploads/shop3_2.jpg"]', '07:00 - 18:00', '0905123987', 'CLAIM-MIA-03', 1, 'approved'),
+('shop_004', 'poi_002', N'Tiệm Trà Thảo Mộc', N'Bán các loại trà hoa cúc, trà sen, trà gừng tốt cho sức khỏe, phù hợp làm quà biếu.', '/uploads/shop4_1.jpg', '["/uploads/shop4_1.jpg", "/uploads/shop4_2.jpg"]', '08:00 - 17:00', '0905876543', 'CLAIM-TRA-04', 1, 'approved'),
 
--- Thêm 1 quán nữa cho poi_002 (Tượng Quán Thế Âm) để đủ 2 quán
-('shop_004', 'poi_002', N'Tiệm Trà Thảo Mộc', N'Bán các loại trà hoa cúc, trà sen, trà gừng tốt cho sức khỏe, phù hợp làm quà biếu.', 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?q=80&w=800&auto=format&fit=crop', '08:00 - 17:00', '0905876543', 'CLAIM-TRA-04', 1, 'pending'),
-
--- Thêm 2 quán cho poi_003 (Cổng Tam Quan) vì hiện tại poi này chưa có quán nào
-('shop_005', 'poi_003', N'Tiệm Bánh Mì Chay Từ Tâm', N'Bánh mì chay nóng hổi, giòn rụm, nhân nấm và đậu hũ sốt nước tương đặc biệt.', 'https://images.unsplash.com/photo-1628194223589-335b0a80850b?q=80&w=800&auto=format&fit=crop', '06:00 - 11:00', '0905112233', 'CLAIM-BANHMI-05', 0, 'pending'),
-
-('shop_006', 'poi_003', N'Quán Cà Phê Sân Vườn', N'Không gian rộng rãi, nhiều cây xanh, thích hợp ngồi nghỉ ngơi sau khi đi bộ tham quan.', 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=800&auto=format&fit=crop', '06:30 - 22:00', '0905998877', 'CLAIM-CAFE-06', 1, 'pending');
+-- Quán thuộc POI 3
+('shop_005', 'poi_003', N'Tiệm Bánh Mì Chay Từ Tâm', N'Bánh mì chay nóng hổi, giòn rụm, nhân nấm và đậu hũ sốt nước tương đặc biệt.', '/uploads/shop5_1.jpg', '["/uploads/shop5_1.jpg", "/uploads/shop5_2.jpg"]', '06:00 - 11:00', '0905112233', 'CLAIM-BANHMI-05', 1, 'approved'),
+('shop_006', 'poi_003', N'Quán Cà Phê Sân Vườn', N'Không gian rộng rãi, nhiều cây xanh, thích hợp ngồi nghỉ ngơi sau khi đi bộ tham quan.', '/uploads/shop6_1.jpg', '["/uploads/shop6_1.jpg", "/uploads/shop6_2.jpg"]', '06:30 - 22:00', '0905998877', 'CLAIM-CAFE-06', 1, 'approved');
+GO
 
 -- Insert Mock Token (Hết hạn sau 24h kể từ lúc chạy script)
 INSERT INTO UnlockTokens (Token, CreatedByClerkId, ExpiresAt)

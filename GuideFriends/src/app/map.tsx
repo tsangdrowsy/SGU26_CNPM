@@ -23,43 +23,38 @@ const COLLAPSED_HEIGHT = 250;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75;
 const DRAG_THRESHOLD = 50;
 
-// Hàm hỗ trợ tạo URL ảnh an toàn và vượt qua Ngrok
 const getSafeImageUrl = (imgPath?: string) => {
   if (!imgPath) return "https://via.placeholder.com/400x200?text=No+Image";
   const fullUrl = imgPath.startsWith("http") ? imgPath : `${API_BASE}${imgPath}`;
-  // Thêm query param để buộc Ngrok nhả ảnh ra
   return `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}ngrok-skip-browser-warning=true`;
 };
 
-const ImageCarousel = ({ imageUrls }: { imageUrls?: string[] }) => {
-  const images = imageUrls && imageUrls.length > 0
-    ? imageUrls
-    : [undefined];
+// 👈 NÂNG CẤP GALLERY: Trượt ngang mượt mà, hiển thị một phần ảnh tiếp theo
+const ImageGallery = ({ imageUrls }: { imageUrls?: string[] }) => {
+  const images = imageUrls && imageUrls.length > 0 ? imageUrls : [undefined];
 
   return (
     <ScrollView
       horizontal
-      pagingEnabled
       showsHorizontalScrollIndicator={false}
-      style={{ width: "100%", height: 180, marginVertical: 16 }}
+      contentContainerStyle={{ gap: 12, paddingVertical: 16, paddingHorizontal: 16 }}
+      // Không dùng pagingEnabled để tránh việc ảnh bị ép khuôn
     >
-      {images.map((img, idx) => {
-        // 👈 Giảm chiều rộng xuống SCREEN_WIDTH - 64 để vừa vặn với Card
-        return (
-          <Image
-            key={idx}
-            source={{ uri: getSafeImageUrl(img) }}
-            style={{ width: SCREEN_WIDTH - 64, height: 180, borderRadius: 16 }}
-            resizeMode="cover"
-            onError={(e) => console.log("Lỗi tải ảnh POI:", e.nativeEvent.error)}
-          />
-        );
-      })}
+      {images.map((img, idx) => (
+        <Image
+          key={idx}
+          source={{ uri: getSafeImageUrl(img) }}
+          // Chiều rộng bằng 80% màn hình để lộ ảnh tiếp theo
+          style={{ width: SCREEN_WIDTH * 0.8, height: 200, borderRadius: 16 }}
+          resizeMode="cover"
+        />
+      ))}
     </ScrollView>
   );
 };
 
 export default function MapScreen() {
+  // ... (Giữ nguyên toàn bộ state và logic cũ)
   const insets = useSafeAreaInsets();
   const locationSubscription = useRef<any>(null);
   const simModeRef = useRef(false);
@@ -91,6 +86,7 @@ export default function MapScreen() {
 
   const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const currentHeightRef = useRef(COLLAPSED_HEIGHT);
+  
 
   useEffect(() => {
     const id = animatedHeight.addListener(({ value }) => { currentHeightRef.current = value; });
@@ -236,6 +232,36 @@ export default function MapScreen() {
     router.push({ pathname: "/chat", params: { poiId: displayPoi.id, lang: currentLanguage } });
   };
 
+  const handleLocateMe = useCallback(async () => {
+    simModeRef.current = false; // Tắt chế độ giả lập
+    setSimMode(false);
+    try {
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        ({ status } = await Location.requestForegroundPermissionsAsync());
+      }
+      if (status !== "granted") {
+        setLocationStatus("denied");
+        return;
+      }
+      setLocationStatus("active");
+      
+      // Lấy GPS thật
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const newCoords = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy ?? 15,
+      };
+      
+      // Cập nhật vị trí và ra lệnh cho bản đồ bay tới đó
+      setUserCoords(newCoords);
+      setPanToLocation({ latitude: newCoords.latitude, longitude: newCoords.longitude });
+    } catch (e) {
+      console.log("Locate me failed:", e);
+    }
+  }, []);
+
   return (
     <View style={styles.safeArea}>
       <View style={styles.container}>
@@ -248,6 +274,7 @@ export default function MapScreen() {
           onPoiSelected={(poi) => { setSelectedPoi(poi); setSelectedShop(null); }}
           onShopSelected={(shop) => handleShopClick(shop)}
           onMapTap={handleMapTap}
+          onLocateMe={handleLocateMe} 
         />
 
         {locationStatus === "denied" && !simMode && (
@@ -314,7 +341,8 @@ export default function MapScreen() {
               
               {selectedShop ? (
                 <View>
-                  <ImageCarousel imageUrls={selectedShop.imageUrls} />
+                  {/* 👈 Dùng ImageGallery thay vì Carousel */}
+                  <ImageGallery imageUrls={selectedShop.imageUrls} />
                   {isTranslatingShop ? (
                     <ActivityIndicator size="large" color={colors.accent} style={{ marginTop: 20 }} />
                   ) : (
@@ -327,7 +355,8 @@ export default function MapScreen() {
                     <Text style={styles.cardDescription}>{translatedDesc.short || displayPoi.shortDescriptionVi}</Text>
                     {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}m</Text>}
 
-                    <ImageCarousel imageUrls={displayPoi.imageUrls} />
+                    {/* 👈 Dùng ImageGallery thay vì Carousel */}
+                    <ImageGallery imageUrls={displayPoi.imageUrls} />
 
                     <View style={styles.divider} />
                     <Text style={styles.sectionTitle}>Details</Text>
@@ -343,7 +372,6 @@ export default function MapScreen() {
                               <Image
                                 source={{ uri: getSafeImageUrl(shop.imageUrls?.[0]) }}
                                 style={styles.shopImage}
-                                onError={(e) => console.log("Lỗi tải ảnh Shop:", e.nativeEvent.error)}
                               />
                               <View style={styles.shopTextWrap}>
                                 <Text style={styles.shopName} numberOfLines={1}>{shop.name}</Text>
@@ -367,6 +395,7 @@ export default function MapScreen() {
   );
 }
 
+// (Giữ nguyên styles ở dưới)
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },

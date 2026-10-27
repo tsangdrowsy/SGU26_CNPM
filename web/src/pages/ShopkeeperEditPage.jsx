@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Store, Image as ImageIcon, ArrowLeft, X, PlusCircle } from "lucide-react";
+import { Store, Image as ImageIcon, ArrowLeft, X, PlusCircle, Star } from "lucide-react";
 
 const API_BASE = "http://localhost:3000";
 
@@ -23,6 +23,7 @@ export default function ShopkeeperEditPage() {
   
   const [existingImages, setExistingImages] = useState([]);
   const [newImageFiles, setNewImageFiles] = useState([]);
+  const [mainImage, setMainImage] = useState(""); // 👈 Thêm state ảnh chính
 
   const getImageUrl = (img) => {
     if (!img) return "https://via.placeholder.com/400x200?text=No+Image";
@@ -55,14 +56,16 @@ export default function ShopkeeperEditPage() {
           poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : "")
         });
 
+        // 👈 Parse ảnh cũ và ảnh chính
         let imgs = [];
         try {
-          imgs = JSON.parse(shop.ImageUrl || "[]");
-          if (!Array.isArray(imgs)) imgs = [shop.ImageUrl];
+          imgs = JSON.parse(shop.GalleryImages || "[]");
+          if (!Array.isArray(imgs)) imgs = [shop.GalleryImages];
         } catch (e) {
-          imgs = shop.ImageUrl ? [shop.ImageUrl] : [];
+          imgs = shop.GalleryImages ? [shop.GalleryImages] : [];
         }
         setExistingImages(imgs);
+        setMainImage(shop.ImageUrl || "");
         
       } catch (err) {
         setError(err.response?.data?.error || "Mã không hợp lệ hoặc không tìm thấy quán.");
@@ -75,8 +78,9 @@ export default function ShopkeeperEditPage() {
 
   const removeExistingImage = (index) => {
     const updated = [...existingImages];
-    updated.splice(index, 1);
+    const removedImg = updated.splice(index, 1)[0];
     setExistingImages(updated);
+    if (removedImg === mainImage) setMainImage("");
   };
 
   const removeNewImage = (index) => {
@@ -92,7 +96,10 @@ export default function ShopkeeperEditPage() {
 
     const data = new FormData();
     Object.keys(formData).forEach(key => data.append(key, formData[key]));
-    data.append("keptImages", JSON.stringify(existingImages));
+    
+    // 👈 Gửi mảng ảnh cũ, ảnh chính và file mới
+    data.append("galleryImages", JSON.stringify(existingImages));
+    data.append("mainImage", mainImage);
 
     if (newImageFiles && newImageFiles.length > 0) {
       for (let i = 0; i < newImageFiles.length; i++) {
@@ -202,24 +209,43 @@ export default function ShopkeeperEditPage() {
             </div>
           </div>
 
+          {/* 👈 GIAO DIỆN QUẢN LÝ ẢNH ĐÃ ĐƯỢC SỬA */}
           <div>
             <label className="block text-sm font-medium mb-2 flex items-center gap-2">
               <ImageIcon size={16} /> Hình ảnh quán
             </label>
             <div className="grid grid-cols-3 gap-3">
-              {existingImages.map((img, idx) => (
-                <div key={`old-${idx}`} className="relative group aspect-square">
-                  <img src={getImageUrl(img)} alt="Shop" className="w-full h-full object-cover rounded-lg border border-gray-200" />
-                  <button type="button" onClick={() => removeExistingImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
+              {existingImages.map((img, idx) => {
+                const isMain = img === mainImage;
+                return (
+                  <div key={`old-${idx}`} className={`relative group aspect-square border-2 rounded-lg overflow-hidden ${isMain ? 'border-blue-500' : 'border-gray-200'}`}>
+                    <img src={getImageUrl(img)} alt="Shop" className="w-full h-full object-cover" />
+                    
+                    {!isMain && (
+                      <button type="button" onClick={() => setMainImage(img)} className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] py-1 font-medium hover:bg-black/80 transition flex justify-center items-center gap-1">
+                        <Star size={10} /> Chọn làm chính
+                      </button>
+                    )}
+                    {isMain && (
+                      <span className="absolute bottom-0 left-0 right-0 bg-blue-500 text-white text-[10px] py-1 text-center font-bold">
+                        Hình chính
+                      </span>
+                    )}
+
+                    <button type="button" onClick={() => removeExistingImage(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow z-10">
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
 
               {newImageFiles.map((file, idx) => (
-                <div key={`new-${idx}`} className="relative group aspect-square">
-                  <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover rounded-lg border-2 border-orange-400" />
-                  <button type="button" onClick={() => removeNewImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
+                <div key={`new-${idx}`} className="relative group aspect-square border-2 border-orange-400 rounded-lg overflow-hidden">
+                  <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover" />
+                  <span className="absolute bottom-0 left-0 right-0 bg-orange-500 text-white text-[10px] py-1 text-center font-bold">
+                    Ảnh mới (Lưu để chọn chính)
+                  </span>
+                  <button type="button" onClick={() => removeNewImage(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow z-10">
                     <X size={14} />
                   </button>
                 </div>

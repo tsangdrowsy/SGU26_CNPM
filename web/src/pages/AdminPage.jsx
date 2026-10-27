@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { PlusCircle, Image as ImageIcon, MapPin, Edit, LogOut, X } from "lucide-react";
+import { PlusCircle, Image as ImageIcon, MapPin, Edit, LogOut, X, Star } from "lucide-react";
 
 const API_BASE = "http://localhost:3000";
 
@@ -22,10 +22,11 @@ export default function AdminPage() {
         latitude: "", longitude: "", radiusMeters: 20,
     });
 
-    const [existingImages, setExistingImages] = useState([]);
-    const [newImageFiles, setNewImageFiles] = useState([]);
+    // 👈 STATE QUẢN LÝ ẢNH MỚI
+    const [existingImages, setExistingImages] = useState([]); // Mảng ảnh cũ
+    const [newImageFiles, setNewImageFiles] = useState([]); // Mảng file mới
+    const [mainImage, setMainImage] = useState(""); // Chuỗi link ảnh chính
 
-    // Hàm xử lý URL ảnh an toàn
     const getImageUrl = (img) => {
         if (!img) return "https://via.placeholder.com/400x200?text=No+Image";
         return img.startsWith("http") ? img : `${API_BASE}${img}`;
@@ -33,7 +34,6 @@ export default function AdminPage() {
 
     const loadData = async () => {
         try {
-            // 👈 Thêm ?t=${Date.now()} để chống cache API
             const [statsRes, tokensRes, poisRes, allShopsRes, pendingShopsRes] = await Promise.all([
                 axios.get(`${API_BASE}/api/admin/stats?t=${Date.now()}`),
                 axios.get(`${API_BASE}/api/admin/tokens?t=${Date.now()}`),
@@ -69,6 +69,7 @@ export default function AdminPage() {
         setFormData({ name: "", shortDescriptionVi: "", fullDescriptionVi: "", latitude: "", longitude: "", radiusMeters: 20 });
         setExistingImages([]);
         setNewImageFiles([]);
+        setMainImage("");
     };
 
     const handleEditClick = (poi) => {
@@ -83,13 +84,16 @@ export default function AdminPage() {
         });
         setExistingImages(poi.imageUrls || []);
         setNewImageFiles([]);
+        setMainImage(poi.imageUrl || ""); // 👈 Load ảnh chính
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const removeExistingImage = (index) => {
         const updated = [...existingImages];
-        updated.splice(index, 1);
+        const removedImg = updated.splice(index, 1)[0];
         setExistingImages(updated);
+        // Nếu xoá đúng ảnh chính thì gỡ luôn
+        if (removedImg === mainImage) setMainImage("");
     };
 
     const removeNewImage = (index) => {
@@ -104,7 +108,10 @@ export default function AdminPage() {
 
         const data = new FormData();
         Object.keys(formData).forEach(key => data.append(key, formData[key]));
-        data.append("keptImages", JSON.stringify(existingImages));
+        
+        // 👈 Gửi mảng ảnh cũ, ảnh chính và file mới
+        data.append("galleryImages", JSON.stringify(existingImages));
+        data.append("mainImage", mainImage);
 
         if (newImageFiles && newImageFiles.length > 0) {
             for (let i = 0; i < newImageFiles.length; i++) {
@@ -152,7 +159,6 @@ export default function AdminPage() {
 
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8">
-            {/* Header & Stats giữ nguyên */}
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
                 <div className="flex items-center gap-4">
@@ -179,7 +185,6 @@ export default function AdminPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Bảng Token giữ nguyên */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h2 className="text-xl font-bold mb-4">Token đang hoạt động</h2>
                     <div className="overflow-y-auto max-h-[400px]">
@@ -211,7 +216,6 @@ export default function AdminPage() {
                     </div>
                 </div>
 
-                {/* Form Thêm/Sửa POI */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold flex items-center gap-2">
@@ -252,25 +256,43 @@ export default function AdminPage() {
                             <input required type="number" name="radiusMeters" value={formData.radiusMeters} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
                         </div>
 
+                        {/* 👈 GIAO DIỆN QUẢN LÝ ẢNH ĐÃ ĐƯỢC SỬA */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                                 <ImageIcon size={16} /> Hình ảnh địa điểm
                             </label>
                             <div className="grid grid-cols-3 gap-3">
-                                {existingImages.map((img, idx) => (
-                                    <div key={`old-${idx}`} className="relative group aspect-square">
-                                        {/* 👈 Dùng getImageUrl để hiển thị đúng link */}
-                                        <img src={getImageUrl(img)} alt="POI" className="w-full h-full object-cover rounded-lg border border-gray-200" />
-                                        <button type="button" onClick={() => removeExistingImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ))}
+                                {existingImages.map((img, idx) => {
+                                    const isMain = img === mainImage;
+                                    return (
+                                        <div key={`old-${idx}`} className={`relative group aspect-square border-2 rounded-lg overflow-hidden ${isMain ? 'border-blue-500' : 'border-gray-200'}`}>
+                                            <img src={getImageUrl(img)} alt="POI" className="w-full h-full object-cover" />
+                                            
+                                            {!isMain && (
+                                                <button type="button" onClick={() => setMainImage(img)} className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] py-1 font-medium hover:bg-black/80 transition flex justify-center items-center gap-1">
+                                                    <Star size={10} /> Chọn làm chính
+                                                </button>
+                                            )}
+                                            {isMain && (
+                                                <span className="absolute bottom-0 left-0 right-0 bg-blue-500 text-white text-[10px] py-1 text-center font-bold">
+                                                    Hình chính
+                                                </span>
+                                            )}
+
+                                            <button type="button" onClick={() => removeExistingImage(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow z-10">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
 
                                 {newImageFiles.map((file, idx) => (
-                                    <div key={`new-${idx}`} className="relative group aspect-square">
-                                        <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover rounded-lg border-2 border-orange-400" />
-                                        <button type="button" onClick={() => removeNewImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
+                                    <div key={`new-${idx}`} className="relative group aspect-square border-2 border-orange-400 rounded-lg overflow-hidden">
+                                        <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover" />
+                                        <span className="absolute bottom-0 left-0 right-0 bg-orange-500 text-white text-[10px] py-1 text-center font-bold">
+                                            Ảnh mới (Lưu để chọn chính)
+                                        </span>
+                                        <button type="button" onClick={() => removeNewImage(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow z-10">
                                             <X size={14} />
                                         </button>
                                     </div>
@@ -291,10 +313,9 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* Duyệt Cửa hàng mới, Danh sách POI, Tất cả Cửa hàng */}
+            {/* Các phần còn lại giữ nguyên */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h2 className="text-xl font-bold mb-4">Duyệt Cửa hàng mới</h2>
-                {/* ... */}
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-gray-50">
@@ -316,10 +337,7 @@ export default function AdminPage() {
                                         </span>
                                     </td>
                                     <td className="p-3">
-                                        <button
-                                            onClick={() => handleApproveShop(shop)}
-                                            className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition font-medium"
-                                        >
+                                        <button onClick={() => handleApproveShop(shop)} className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition font-medium">
                                             Duyệt
                                         </button>
                                     </td>
@@ -337,12 +355,12 @@ export default function AdminPage() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {pois.map((poi) => {
-                        const firstImg = poi.imageUrls?.[0];
+                        const mainImg = poi.imageUrl || poi.imageUrls?.[0];
                         return (
                             <div key={poi.id} className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition">
                                 <div className="h-40 bg-gray-100 relative">
-                                    {firstImg ? (
-                                        <img src={getImageUrl(firstImg)} alt={poi.name} className="w-full h-full object-cover" />
+                                    {mainImg ? (
+                                        <img src={getImageUrl(mainImg)} alt={poi.name} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="flex items-center justify-center h-full text-gray-400"><ImageIcon size={32} /></div>
                                     )}
@@ -402,6 +420,6 @@ export default function AdminPage() {
                     {allShops.length === 0 && <p className="text-center text-gray-500 py-4">Chưa có cửa hàng nào.</p>}
                 </div>
             </div>
-        </div >
+        </div>
     );
 }

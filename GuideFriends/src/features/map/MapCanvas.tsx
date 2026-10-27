@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { POI, Shopkeeper } from "../../types/poi"; // 👈 Thêm Shopkeeper
+import { MaterialIcons } from '@expo/vector-icons'; // 👈 Import icon
+import { POI, Shopkeeper } from "../../types/poi";
 import { UserLocation } from "./types";
 
 type MapCanvasProps = {
@@ -11,20 +12,16 @@ type MapCanvasProps = {
   userLocation: UserLocation | null;
   onReady: () => void;
   onPoiSelected: (poi: POI) => void;
-  onShopSelected: (shop: Shopkeeper) => void; // 👈 Thêm prop
+  onShopSelected: (shop: Shopkeeper) => void;
   onMapTap: () => void;
   panToLocation?: { latitude: number; longitude: number } | null;
+  onLocateMe: () => void;
 };
 
 function buildHtml(pois: POI[], center: { latitude: number; longitude: number }): string {
-  // 👈 Truyền cả mảng shopkeepers xuống HTML
   const poisPayload = pois.map((p) => ({
-    id: p.id,
-    name: p.name,
-    latitude: p.location.latitude,
-    longitude: p.location.longitude,
-    radiusMeters: p.radiusMeters,
-    shopkeepers: p.shopkeepers || [] 
+    id: p.id, name: p.name, latitude: p.location.latitude, longitude: p.location.longitude, radiusMeters: p.radiusMeters,
+    shopkeepers: p.shopkeepers || []
   }));
 
   return `
@@ -63,7 +60,6 @@ function buildHtml(pois: POI[], center: { latitude: number; longitude: number })
     }).addTo(map);
 
     POIS.forEach(function (p) {
-      // Vẽ POI (Màu cam, to hơn)
       L.circle([p.latitude, p.longitude], {
         radius: p.radiusMeters, color: "#F97316", weight: 1, opacity: 0.6, fillColor: "#F97316", fillOpacity: 0.12
       }).addTo(map);
@@ -75,18 +71,14 @@ function buildHtml(pois: POI[], center: { latitude: number; longitude: number })
       m.bindTooltip(p.name, { direction: "top", offset: [0, -8] });
       m.on("click", function () { send({ type: "poiSelected", id: p.id }); });
 
-      // 👈 Vẽ Shopkeepers (Màu xanh lá, nhỏ hơn)
       if (p.shopkeepers && p.shopkeepers.length > 0) {
         p.shopkeepers.forEach(function (s) {
           if (s.latitude && s.longitude) {
             var sMarker = L.circleMarker([s.latitude, s.longitude], {
               radius: 6, color: "#FFFFFF", weight: 1.5, fillColor: "#10B981", fillOpacity: 1
             }).addTo(map);
-            
             sMarker.bindTooltip(s.name, { direction: "top", offset: [0, -6] });
-            sMarker.on("click", function () { 
-              send({ type: "shopSelected", shop: s }); // Gửi toàn bộ data shop về
-            });
+            sMarker.on("click", function () { send({ type: "shopSelected", shop: s }); });
           }
         });
       }
@@ -118,7 +110,7 @@ function buildHtml(pois: POI[], center: { latitude: number; longitude: number })
 }
 
 export default function MapCanvas({
-  pois, center, userLocation, onReady, onPoiSelected, onShopSelected, onMapTap, panToLocation,
+  pois, center, userLocation, onReady, onPoiSelected, onShopSelected, onMapTap, panToLocation, onLocateMe,
 }: MapCanvasProps) {
   const webRef = useRef<WebView>(null);
   const initialCenter = useRef(center);
@@ -136,6 +128,7 @@ export default function MapCanvas({
   }, [panToLocation]);
 
   const zoomBy = (dir: 1 | -1) => webRef.current?.injectJavaScript(`window.__zoom && window.__zoom(${dir}); true;`);
+
   const locateMe = () => webRef.current?.injectJavaScript(`window.__locateMe && window.__locateMe(); true;`);
 
   const handleMessage = (event: { nativeEvent: { data: string } }) => {
@@ -145,7 +138,7 @@ export default function MapCanvas({
         const poi = pois.find((p) => p.id === data.id);
         if (poi) onPoiSelected(poi);
       } else if (data.type === "shopSelected") {
-        onShopSelected(data.shop); // 👈 Bắt sự kiện bấm vào shop
+        onShopSelected(data.shop);
       } else if (data.type === "mapTap") {
         onMapTap();
       }
@@ -168,20 +161,52 @@ export default function MapCanvas({
         setBuiltInZoomControls={false}
         setDisplayZoomControls={false}
       />
+
       <View style={styles.zoomWrap}>
-        <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(1)}><Text style={styles.zoomBtnText}>+</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(-1)}><Text style={styles.zoomBtnText}>−</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.zoomBtn, styles.locateBtn]} onPress={locateMe}><Text style={styles.locateBtnText}>📍</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(1)} activeOpacity={0.8}>
+          <Text style={styles.zoomBtnText}>+</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(-1)} activeOpacity={0.8}>
+          <Text style={styles.zoomBtnText}>−</Text>
+        </TouchableOpacity>
+
+      
+        <TouchableOpacity style={[styles.zoomBtn, styles.locateBtn]} onPress={onLocateMe} activeOpacity={0.8}>
+          <MaterialIcons name="my-location" size={22} color="#374151" />
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
+
 const styles = StyleSheet.create({
   webview: { flex: 1 },
-  zoomWrap: { position: "absolute", right: 12, top: "38%", gap: 8, zIndex: 10 },
-  zoomBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E5E7EB", elevation: 4 },
+  zoomWrap: {
+    position: "absolute",
+    right: 12,
+    top: "38%",
+    gap: 8,
+    zIndex: 10,
+  },
+  zoomBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
   zoomBtnText: { fontSize: 22, fontWeight: "700", color: "#374151" },
-  locateBtn: { marginTop: 16 },
-  locateBtnText: { fontSize: 20 },
+  locateBtn: {
+    marginTop: 8, // Khoảng cách với nút -
+    backgroundColor: "#F3F4F6", // Màu xám nhạt để phân biệt
+  },
 });

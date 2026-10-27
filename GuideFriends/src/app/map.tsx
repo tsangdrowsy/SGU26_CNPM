@@ -1,8 +1,8 @@
 // src/app/map.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Animated, AppState, Dimensions, Linking, PanResponder,
-  ScrollView, StyleSheet, Text, TouchableOpacity, View, Image //  Thêm Image
+  ActivityIndicator, Animated, AppState, Dimensions, PanResponder,
+  ScrollView, StyleSheet, Text, TouchableOpacity, View, Image
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { MAP_CENTER } from "../data/mockPois";
 import { fetchPois, API_BASE } from "../api/pois";
-import { LanguageCode, POI, Shopkeeper } from "../types/poi"; // 👈 Thêm Shopkeeper
+import { LanguageCode, POI, Shopkeeper } from "../types/poi";
 import { colors } from "../theme/colors";
 import { getDistanceMeters } from "../features/map/geo";
 import MapCanvas from "../features/map/MapCanvas";
@@ -18,11 +18,39 @@ import { UserLocation } from "../features/map/types";
 import { translateText, translateBatch } from "../services/translationService";
 import { speak, stopSpeaking } from "../services/ttsService";
 
-
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLLAPSED_HEIGHT = 250;
-const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75; // Tăng chiều cao lên một chút để chứa list quán
+const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75;
 const DRAG_THRESHOLD = 50;
+
+// 👈 1. ĐƯA COMPONENT RA NGOÀI ĐỂ TRÁNH LỖI GIẬT LAG & RESET STATE
+const ImageCarousel = ({ imageUrls }: { imageUrls?: string[] }) => {
+  const images = imageUrls && imageUrls.length > 0
+    ? imageUrls
+    : ["https://via.placeholder.com/400x200?text=No+Image"];
+
+  return (
+    <ScrollView
+      horizontal
+      pagingEnabled
+      showsHorizontalScrollIndicator={false}
+      style={{ width: "100%", height: 180, marginVertical: 16 }}
+    >
+      {images.map((img, idx) => {
+        // Tự động nhận diện link ngoài (http) hay link local (/uploads)
+        const uri = img.startsWith("http") ? img : `${API_BASE}${img}`;
+        return (
+          <Image
+            key={idx}
+            source={{ uri }}
+            style={{ width: SCREEN_WIDTH - 32, height: 180, borderRadius: 16 }}
+            resizeMode="cover"
+          />
+        );
+      })}
+    </ScrollView>
+  );
+};
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
@@ -48,43 +76,17 @@ export default function MapScreen() {
   const [translatedDesc, setTranslatedDesc] = useState({ short: "", full: "" });
   const [isTranslating, setIsTranslating] = useState(false);
 
-  const [selectedShop, setSelectedShop] = useState<Shopkeeper | null>(null); // Quán đang được bấm vào
+  const [selectedShop, setSelectedShop] = useState<Shopkeeper | null>(null); 
   const [translatedShopDesc, setTranslatedShopDesc] = useState("");
   const [isTranslatingShop, setIsTranslatingShop] = useState(false);
-  const [panToLocation, setPanToLocation] = useState<{ latitude: number, longitude: number } | null>(null); // Lệnh bay map
+  const [panToLocation, setPanToLocation] = useState<{ latitude: number, longitude: number } | null>(null); 
 
   const displayPoi = selectedPoi ?? nearbyPoi;
 
   // --- ANIMATION CHO BOTTOM SHEET ---
   const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const currentHeightRef = useRef(COLLAPSED_HEIGHT);
-  const SCREEN_WIDTH = Dimensions.get("window").width;
 
-  // Component Thanh trượt ảnh
-  const ImageCarousel = ({ imageUrl }: { imageUrl?: string }) => {
-    // Tạo giả lập 3 ảnh để bạn thấy hiệu ứng vuốt
-    const images = imageUrl
-      ? [imageUrl, imageUrl, imageUrl]
-      : ["https://via.placeholder.com/400x200?text=No+Image"];
-
-    return (
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        style={{ width: "100%", height: 180, marginVertical: 16 }}
-      >
-        {images.map((img, idx) => (
-          <Image
-            key={idx}
-            source={{ uri: img.startsWith("http") && !img.includes("placeholder") ? `${API_BASE}${img}` : img }}
-            style={{ width: SCREEN_WIDTH - 32, height: 180, borderRadius: 16 }}
-            resizeMode="cover"
-          />
-        ))}
-      </ScrollView>
-    );
-  };
   useEffect(() => {
     const id = animatedHeight.addListener(({ value }) => { currentHeightRef.current = value; });
     return () => animatedHeight.removeListener(id);
@@ -129,27 +131,21 @@ export default function MapScreen() {
   // --- XỬ LÝ KHI BẤM VÀO QUÁN ---
   const handleShopClick = async (shop: Shopkeeper) => {
     setSelectedShop(shop);
-    // Bay map tới vị trí quán
     if (shop.latitude && shop.longitude) {
       setPanToLocation({ latitude: shop.latitude, longitude: shop.longitude });
     }
-    // Dịch mô tả quán
     setIsTranslatingShop(true);
     const text = await translateText(shop.descriptionVi || "", currentLanguage);
     setTranslatedShopDesc(text);
     setIsTranslatingShop(false);
   };
 
-  // Nếu bấm ra ngoài map thì huỷ chọn quán
   const handleMapTap = () => {
     setSelectedPoi(null);
     setSelectedShop(null);
   };
 
-  // --- CÁC HÀM LOAD DỮ LIỆU & GPS CŨ GIỮ NGUYÊN ---
-  useEffect(() => {
-    simModeRef.current = simMode;
-  }, [simMode]);
+  useEffect(() => { simModeRef.current = simMode; }, [simMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,7 +173,6 @@ export default function MapScreen() {
   useEffect(() => { const t = setTimeout(() => setMapReady(true), 4000); return () => clearTimeout(t); }, []);
 
   const startLocation = useCallback(async () => {
-    // (Giữ nguyên logic GPS cũ của bạn)
     try {
       setLocationStatus("requesting");
       let { status } = await Location.getForegroundPermissionsAsync();
@@ -245,14 +240,13 @@ export default function MapScreen() {
           pois={pois}
           center={userCoords ?? MAP_CENTER}
           userLocation={userCoords}
-          panToLocation={panToLocation} // 👈 Truyền lệnh bay map
+          panToLocation={panToLocation}
           onReady={() => setMapReady(true)}
           onPoiSelected={(poi) => { setSelectedPoi(poi); setSelectedShop(null); }}
           onShopSelected={(shop) => handleShopClick(shop)}
           onMapTap={handleMapTap}
         />
 
-        {/* Overlays giữ nguyên */}
         {locationStatus === "denied" && !simMode && (
           <View style={[styles.deniedBanner, { top: insets.top + 60 }]}>
             <Text style={styles.deniedText}>Location denied.</Text>
@@ -268,7 +262,6 @@ export default function MapScreen() {
           </View>
         </View>
 
-        {/* ===== BOTTOM STACK ===== */}
         <View style={[styles.bottomStack, { bottom: insets.bottom }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.simBarContent}>
             {pois.map((poi) => (
@@ -281,10 +274,8 @@ export default function MapScreen() {
           <Animated.View style={[styles.card, { height: animatedHeight }]}>
             <View {...panResponder.panHandlers} style={styles.dragHandleArea}><View style={styles.dragHandle} /></View>
 
-            {/* HEADER CARD: Hiển thị POI hoặc SHOP tuỳ vào trạng thái */}
             <View style={styles.cardHeaderFixed}>
               {selectedShop ? (
-                // NẾU ĐANG CHỌN SHOP
                 <View>
                   <TouchableOpacity onPress={() => setSelectedShop(null)} style={{ marginBottom: 8 }}>
                     <Text style={{ color: colors.accent, fontWeight: 'bold' }}>← Back to POI</Text>
@@ -293,7 +284,6 @@ export default function MapScreen() {
                   <Text style={{ color: colors.textSecondary, marginTop: 4 }}>🕒 {selectedShop.openingHours || "Đang cập nhật"}</Text>
                 </View>
               ) : (
-                // NẾU ĐANG CHỌN POI
                 <>
                   <View style={styles.cardTitleRow}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{displayPoi ? displayPoi.name : "Linh Ung Pagoda Map"}</Text>
@@ -317,14 +307,12 @@ export default function MapScreen() {
               )}
             </View>
 
-            {/* NỘI DUNG CARD */}
             <ScrollView style={styles.cardScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}>
-
-              {/* === CHẾ ĐỘ XEM SHOP === */}
+              
               {selectedShop ? (
                 <View>
-                  <ImageCarousel imageUrl={selectedShop.imageUrl} />
-
+                  {/* 👈 SỬA THÀNH imageUrls */}
+                  <ImageCarousel imageUrls={selectedShop.imageUrls} />
                   {isTranslatingShop ? (
                     <ActivityIndicator size="large" color={colors.accent} style={{ marginTop: 20 }} />
                   ) : (
@@ -332,33 +320,32 @@ export default function MapScreen() {
                   )}
                 </View>
               ) : (
-                /* === CHẾ ĐỘ XEM POI === */
                 displayPoi ? (
                   <>
                     <Text style={styles.cardDescription}>{translatedDesc.short || displayPoi.shortDescriptionVi}</Text>
                     {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}m</Text>}
 
-                      <ImageCarousel imageUrl={displayPoi.imageUrl} />
+                    {/* 👈 SỬA THÀNH imageUrls */}
+                    <ImageCarousel imageUrls={displayPoi.imageUrls} />
 
                     <View style={styles.divider} />
                     <Text style={styles.sectionTitle}>Details</Text>
                     <Text style={styles.fullDescription}>{translatedDesc.full || displayPoi.fullDescriptionVi}</Text>
 
-                    {/*  PHẦN HIỂN THỊ CÁC QUÁN CUỘN NGANG */}
                     {displayPoi.shopkeepers && displayPoi.shopkeepers.length > 0 && (
                       <>
                         <View style={styles.divider} />
                         <Text style={styles.sectionTitle}>Shops nearby</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 10 }}>
                           {displayPoi.shopkeepers.map((shop) => (
-                            <TouchableOpacity
-                              key={shop.id}
-                              style={styles.shopHorizontalCard}
-                              onPress={() => handleShopClick(shop)}
-                              activeOpacity={0.8}
-                            >
+                            <TouchableOpacity key={shop.id} style={styles.shopHorizontalCard} onPress={() => handleShopClick(shop)} activeOpacity={0.8}>
+                              {/* 👈 LẤY ẢNH ĐẦU TIÊN TRONG MẢNG */}
                               <Image
-                                source={{ uri: shop.imageUrl ? `${API_BASE}${shop.imageUrl}` : "https://via.placeholder.com/150" }}
+                                source={{ 
+                                  uri: shop.imageUrls?.[0] 
+                                    ? (shop.imageUrls[0].startsWith("http") ? shop.imageUrls[0] : `${API_BASE}${shop.imageUrls[0]}`)
+                                    : "https://via.placeholder.com/150" 
+                                }}
                                 style={styles.shopImage}
                               />
                               <View style={styles.shopTextWrap}>
@@ -384,7 +371,6 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ... các style cũ giữ nguyên ...
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
   header: { position: "absolute", left: 16, right: 16, zIndex: 20, flexDirection: "row", justifyContent: "space-between" },
@@ -426,31 +412,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.textPrimary, marginBottom: 12 },
   fullDescription: { fontSize: 15, color: colors.textSecondary, lineHeight: 24 },
 
-  // 👈 STYLE CHO THẺ QUÁN CUỘN NGANG
-  shopHorizontalCard: {
-    width: 160,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  shopImage: {
-    width: "100%",
-    height: 100,
-    backgroundColor: "#E5E7EB",
-  },
-  shopTextWrap: {
-    padding: 10,
-  },
-  shopName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  shopHours: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  }
+  shopHorizontalCard: { width: 160, backgroundColor: "#F9FAFB", borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#E5E7EB" },
+  shopImage: { width: "100%", height: 100, backgroundColor: "#E5E7EB" },
+  shopTextWrap: { padding: 10 },
+  shopName: { fontSize: 14, fontWeight: "700", color: colors.textPrimary, marginBottom: 4 },
+  shopHours: { fontSize: 12, color: colors.textSecondary },
 });

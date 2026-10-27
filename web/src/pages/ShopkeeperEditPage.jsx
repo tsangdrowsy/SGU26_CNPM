@@ -1,42 +1,39 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Store, Image as ImageIcon, ArrowLeft } from "lucide-react";
+import { Store, Image as ImageIcon, ArrowLeft, X, PlusCircle } from "lucide-react";
 
 const API_BASE = "http://localhost:3000";
 
 export default function ShopkeeperEditPage() {
-  const { code } = useParams(); // Lấy mã code từ URL
+  const { code } = useParams();
   const navigate = useNavigate();
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  
-  // 👈 Thêm state lưu danh sách POIs
   const [pois, setPois] = useState([]);
 
   const [formData, setFormData] = useState({
-    name: "", descriptionVi: "", openingHours: "", phone: "", poiId: "" // 👈 Thêm poiId
+    name: "", descriptionVi: "", openingHours: "", phone: "", poiId: ""
   });
   const [startHour, setStartHour] = useState("08");
   const [endHour, setEndHour] = useState("21");
   const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-  
-  const [imageFile, setImageFile] = useState(null);
 
-  // 👈 Tải danh sách POIs và dữ liệu quán cùng lúc
+  // 👈 STATE QUẢN LÝ ẢNH
+  const [existingImages, setExistingImages] = useState([]);
+  const [newImageFiles, setNewImageFiles] = useState([]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Tải danh sách POIs
         const poisRes = await axios.get(`${API_BASE}/api/pois`);
         setPois(poisRes.data.pois);
 
-        // Tải dữ liệu quán
         const res = await axios.get(`${API_BASE}/api/shopkeeper/verify/${code.trim()}`);
         const shop = res.data.shop;
-        
+
         let pStart = "08", pEnd = "21";
         if (shop.OpeningHours && shop.OpeningHours.includes(" - ")) {
           const parts = shop.OpeningHours.split(" - ");
@@ -51,8 +48,19 @@ export default function ShopkeeperEditPage() {
           descriptionVi: shop.DescriptionVi || "",
           openingHours: shop.OpeningHours || "08:00 - 21:00",
           phone: shop.Phone || "",
-          poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : "") // 👈 Gán PoiId hiện tại
+          poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : "")
         });
+
+        // 👈 Load ảnh cũ vào state
+        let imgs = [];
+        try {
+          imgs = JSON.parse(shop.ImageUrl || "[]");
+          if (!Array.isArray(imgs)) imgs = [shop.ImageUrl]; // Fallback data cũ
+        } catch (e) {
+          imgs = shop.ImageUrl ? [shop.ImageUrl] : [];
+        }
+        setExistingImages(imgs);
+
       } catch (err) {
         setError(err.response?.data?.error || "Mã không hợp lệ hoặc không tìm thấy quán.");
       } finally {
@@ -62,6 +70,18 @@ export default function ShopkeeperEditPage() {
     fetchData();
   }, [code]);
 
+  const removeExistingImage = (index) => {
+    const updated = [...existingImages];
+    updated.splice(index, 1);
+    setExistingImages(updated);
+  };
+
+  const removeNewImage = (index) => {
+    const updated = [...newImageFiles];
+    updated.splice(index, 1);
+    setNewImageFiles(updated);
+  };
+
   const handleUpdate = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -69,7 +89,16 @@ export default function ShopkeeperEditPage() {
 
     const data = new FormData();
     Object.keys(formData).forEach(key => data.append(key, formData[key]));
-    if (imageFile) data.append("image", imageFile);
+
+    // 👈 Gửi mảng ảnh cũ được giữ lại
+    data.append("keptImages", JSON.stringify(existingImages));
+
+    // 👈 Gửi mảng ảnh mới
+    if (newImageFiles && newImageFiles.length > 0) {
+      for (let i = 0; i < newImageFiles.length; i++) {
+        data.append("images", newImageFiles[i]);
+      }
+    }
 
     try {
       await axios.put(`${API_BASE}/api/shopkeeper/update/${code.trim()}`, data);
@@ -97,7 +126,7 @@ export default function ShopkeeperEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-2xl bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
-        
+
         <div className="text-center mb-8 relative">
           <button onClick={() => navigate("/shopkeeper")} className="absolute left-0 top-2 text-gray-500 hover:text-orange-500">
             <ArrowLeft size={24} />
@@ -110,13 +139,12 @@ export default function ShopkeeperEditPage() {
         {error && <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-6 text-center">{error}</div>}
 
         <form onSubmit={handleUpdate} className="space-y-4">
-          
-          {/* 👈 THÊM DROPDOWN CHỌN POI Ở ĐÂY */}
+
           <div>
             <label className="block text-sm font-medium mb-1">Thuộc địa điểm (POI)</label>
-            <select 
-              value={formData.poiId} 
-              onChange={(e) => setFormData({...formData, poiId: e.target.value})} 
+            <select
+              value={formData.poiId}
+              onChange={(e) => setFormData({ ...formData, poiId: e.target.value })}
               className="w-full border p-3 rounded-lg bg-white"
             >
               {pois.map(p => (
@@ -127,35 +155,35 @@ export default function ShopkeeperEditPage() {
 
           <div>
             <label className="block text-sm font-medium mb-1">Tên cửa hàng</label>
-            <input required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full border p-3 rounded-lg" />
+            <input required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full border p-3 rounded-lg" />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium mb-1">Mô tả</label>
-            <textarea rows="3" value={formData.descriptionVi} onChange={(e) => setFormData({...formData, descriptionVi: e.target.value})} className="w-full border p-3 rounded-lg" />
+            <textarea rows="3" value={formData.descriptionVi} onChange={(e) => setFormData({ ...formData, descriptionVi: e.target.value })} className="w-full border p-3 rounded-lg" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Giờ mở cửa</label>
               <div className="flex items-center gap-2">
-                <select 
-                  value={startHour} 
+                <select
+                  value={startHour}
                   onChange={(e) => {
                     setStartHour(e.target.value);
-                    setFormData({...formData, openingHours: `${e.target.value}:00 - ${endHour}:00`});
-                  }} 
+                    setFormData({ ...formData, openingHours: `${e.target.value}:00 - ${endHour}:00` });
+                  }}
                   className="border p-3 rounded-lg bg-white w-full"
                 >
                   {hours.map(h => <option key={`start-${h}`} value={h}>{h}:00</option>)}
                 </select>
                 <span className="text-gray-500 font-bold">đến</span>
-                <select 
-                  value={endHour} 
+                <select
+                  value={endHour}
                   onChange={(e) => {
                     setEndHour(e.target.value);
-                    setFormData({...formData, openingHours: `${startHour}:00 - ${e.target.value}:00`});
-                  }} 
+                    setFormData({ ...formData, openingHours: `${startHour}:00 - ${e.target.value}:00` });
+                  }}
                   className="border p-3 rounded-lg bg-white w-full"
                 >
                   {hours.map(h => <option key={`end-${h}`} value={h}>{h}:00</option>)}
@@ -165,23 +193,50 @@ export default function ShopkeeperEditPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">Số điện thoại</label>
-              <input 
-                value={formData.phone} 
+              <input
+                value={formData.phone}
                 onChange={(e) => {
                   const onlyNums = e.target.value.replace(/\D/g, '');
-                  setFormData({...formData, phone: onlyNums});
-                }} 
-                placeholder="0905..." 
-                className="w-full border p-3 rounded-lg" 
+                  setFormData({ ...formData, phone: onlyNums });
+                }}
+                placeholder="0905..."
+                className="w-full border p-3 rounded-lg"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1 flex items-center gap-2">
-              <ImageIcon size={16} /> Ảnh quán (Bỏ trống nếu giữ ảnh cũ)
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <ImageIcon size={16} /> Hình ảnh quán
             </label>
-            <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="w-full border p-2 rounded-lg text-sm" />
+            <div className="grid grid-cols-3 gap-3">
+              {/* Ảnh cũ */}
+              {existingImages.map((img, idx) => (
+                <div key={`old-${idx}`} className="relative group aspect-square">
+                  <img src={`${API_BASE}${img}`} alt="Shop" className="w-full h-full object-cover rounded-lg border border-gray-200" />
+                  <button type="button" onClick={() => removeExistingImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+
+              {/* Ảnh mới chọn */}
+              {newImageFiles.map((file, idx) => (
+                <div key={`new-${idx}`} className="relative group aspect-square">
+                  <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover rounded-lg border-2 border-orange-400" />
+                  <button type="button" onClick={() => removeNewImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+
+              {/* Nút Thêm */}
+              <label className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition aspect-square">
+                <PlusCircle className="text-gray-400 mb-1" size={24} />
+                <span className="text-xs text-gray-500">Thêm ảnh</span>
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => setNewImageFiles([...newImageFiles, ...Array.from(e.target.files)])} />
+              </label>
+            </div>
           </div>
 
           <button disabled={saving} type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition mt-4">

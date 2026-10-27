@@ -6,10 +6,10 @@ export interface Shopkeeper {
   id: string;
   name: string;
   descriptionVi: string;
-  imageUrl?: string;
+  imageUrls?: string[];
   openingHours?: string;
   phone?: string;
-  latitude?: number;  
+  latitude?: number;
   longitude?: number;
 }
 
@@ -25,6 +25,6 @@ export interface POI {
   fullDescriptionVi: string;
   location: POILocation;
   radiusMeters: number;
-  imageUrl?: string;
+  imageUrls?: string[];
   shopkeepers?: Shopkeeper[];
 }

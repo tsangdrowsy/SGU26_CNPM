@@ -287,12 +287,17 @@ app.get("/api/admin/tokens", async (req, res) => {
   }
 });
 
-app.post("/api/admin/pois", upload.single("image"), async (req, res) => {
+app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
   try {
     await connectPool();
     const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters } = req.body;
     const newId = "poi_" + Math.floor(1000 + Math.random() * 9000);
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    
+    let newImages = [];
+    if (req.files && req.files.length > 0) {
+      newImages = req.files.map(f => `/uploads/${f.filename}`);
+    }
+    const imageUrlString = JSON.stringify(newImages);
 
     await pool.request()
       .input("id", sql.VarChar(50), newId)
@@ -302,7 +307,7 @@ app.post("/api/admin/pois", upload.single("image"), async (req, res) => {
       .input("lat", sql.Decimal(9, 6), latitude)
       .input("lng", sql.Decimal(9, 6), longitude)
       .input("radius", sql.Int, radiusMeters || 20)
-      .input("imageUrl", sql.NVarChar(500), imageUrl)
+      .input("imageUrl", sql.NVarChar(sql.MAX), imageUrlString)
       .query(`
         INSERT INTO POIs (Id, Name, ShortDescriptionVi, FullDescriptionVi, Latitude, Longitude, RadiusMeters, ImageUrl)
         VALUES (@id, @name, @shortDesc, @fullDesc, @lat, @lng, @radius, @imageUrl)
@@ -314,21 +319,33 @@ app.post("/api/admin/pois", upload.single("image"), async (req, res) => {
   }
 });
 
-app.put("/api/admin/pois/:id", upload.single("image"), async (req, res) => {
+app.put("/api/admin/pois/:id", upload.array("images", 10), async (req, res) => {
   const { id } = req.params;
-  const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters } = req.body;
+  const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters, keptImages } = req.body;
 
   try {
     await connectPool();
-    let imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    
+    // Lấy các ảnh cũ được giữ lại
+    let finalImages = [];
+    try {
+      finalImages = JSON.parse(keptImages || "[]");
+    } catch (e) { finalImages = []; }
+
+    // Thêm các ảnh mới upload
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map(f => `/uploads/${f.filename}`);
+      finalImages = [...finalImages, ...newImages];
+    }
+
+    let imageUrlString = JSON.stringify(finalImages);
 
     let query = `
       UPDATE POIs 
       SET Name = @name, ShortDescriptionVi = @shortDesc, FullDescriptionVi = @fullDesc,
-          Latitude = @lat, Longitude = @lng, RadiusMeters = @radius
+          Latitude = @lat, Longitude = @lng, RadiusMeters = @radius, ImageUrl = @imageUrl
+      WHERE Id = @id
     `;
-    if (imageUrl) query += `, ImageUrl = @imageUrl`;
-    query += ` WHERE Id = @id`;
 
     const request = pool.request()
       .input("id", sql.VarChar(50), id)
@@ -337,9 +354,8 @@ app.put("/api/admin/pois/:id", upload.single("image"), async (req, res) => {
       .input("fullDesc", sql.NVarChar(sql.MAX), fullDescriptionVi)
       .input("lat", sql.Decimal(9, 6), latitude)
       .input("lng", sql.Decimal(9, 6), longitude)
-      .input("radius", sql.Int, radiusMeters || 20);
-
-    if (imageUrl) request.input("imageUrl", sql.NVarChar(500), imageUrl);
+      .input("radius", sql.Int, radiusMeters || 20)
+      .input("imageUrl", sql.NVarChar(sql.MAX), imageUrlString);
 
     await request.query(query);
     res.json({ success: true, id });
@@ -347,7 +363,6 @@ app.put("/api/admin/pois/:id", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // ==========================================
 // 5. SHOPKEEPER ROUTES
 // ==========================================
@@ -401,16 +416,24 @@ app.get("/api/shopkeeper/verify/:claimCode", async (req, res) => {
   }
 });
 
-app.put("/api/shopkeeper/update/:claimCode", upload.single("image"), async (req, res) => {
+app.put("/api/shopkeeper/update/:claimCode", upload.array("images", 10), async (req, res) => {
   const { claimCode } = req.params;
-   const { name, descriptionVi, openingHours, phone, poiId } = req.body;
+  const { name, descriptionVi, openingHours, phone, poiId, keptImages } = req.body;
 
   try {
     await connectPool();
-    const oldShop = (await pool.request().input("claimCode", sql.NVarChar(50), claimCode).query("SELECT ImageUrl FROM Shopkeepers WHERE ClaimCode = @claimCode")).recordset[0];
-    if (!oldShop) return res.status(404).json({ error: "Mã không hợp lệ" });
+    
+    let finalImages = [];
+    try {
+      finalImages = JSON.parse(keptImages || "[]");
+    } catch (e) { finalImages = []; }
 
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : oldShop.ImageUrl;
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map(f => `/uploads/${f.filename}`);
+      finalImages = [...finalImages, ...newImages];
+    }
+
+    let imageUrlString = JSON.stringify(finalImages);
 
     await pool.request()
       .input("claimCode", sql.NVarChar(50), claimCode)
@@ -418,11 +441,12 @@ app.put("/api/shopkeeper/update/:claimCode", upload.single("image"), async (req,
       .input("desc", sql.NVarChar(1000), descriptionVi)
       .input("hours", sql.NVarChar(100), openingHours)
       .input("phone", sql.NVarChar(20), phone)
-      .input("img", sql.NVarChar(500), imageUrl)
+      .input("poiId", sql.VarChar(50), poiId)
+      .input("img", sql.NVarChar(sql.MAX), imageUrlString)
       .query(`
         UPDATE Shopkeepers 
         SET Name = @name, DescriptionVi = @desc, OpeningHours = @hours, 
-            Phone = @phone, ImageUrl = @img, IsClaimed = 1
+            Phone = @phone, ImageUrl = @img, PoiId = @poiId, IsClaimed = 1
         WHERE ClaimCode = @claimCode
       `);
 

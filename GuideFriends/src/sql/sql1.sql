@@ -92,7 +92,9 @@ CREATE TABLE UnlockTokens (
 );
 GO
 
-
+-- Tăng kích thước cột lên để chứa được mảng JSON dài
+ALTER TABLE POIs ALTER COLUMN ImageUrl NVARCHAR(MAX);
+ALTER TABLE Shopkeepers ALTER COLUMN ImageUrl NVARCHAR(MAX);
 -- Thêm cột Trạng thái (pending: Chờ duyệt, approved: Đã duyệt)
 ALTER TABLE Shopkeepers ADD Status VARCHAR(20) DEFAULT 'pending';
 -- Thêm cột Tọa độ

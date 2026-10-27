@@ -63,6 +63,19 @@ async function connectPool() {
   console.log("[db] connected to", process.env.DB_NAME);
 }
 
+function parseImages(str) {
+  if (!str) return [];
+  try {
+    const parsed = JSON.parse(str);
+    const arr = Array.isArray(parsed) ? parsed : [str];
+    // Lọc bỏ các link rác example.com nếu có
+    return arr.filter(url => url && !url.includes("example.com"));
+  } catch {
+    if (str.includes("example.com")) return [];
+    return [str];
+  }
+}
+
 // ---------- HELPER FUNCTIONS ----------
 function rowToPoi(r) {
   return {
@@ -71,6 +84,7 @@ function rowToPoi(r) {
     shortDescriptionVi: r.ShortDescriptionVi,
     fullDescriptionVi: r.FullDescriptionVi,
     radiusMeters: r.RadiusMeters,
+    imageUrls: parseImages(r.ImageUrl),
     imageUrl: r.ImageUrl,
     location: {
       latitude: Number(r.Latitude),
@@ -105,8 +119,9 @@ app.get("/api/pois", async (_req, res) => {
       ...poi,
       shopkeepers: shops.filter(s => s.PoiId === poi.id).map(s => ({
         id: s.Id, name: s.Name, descriptionVi: s.DescriptionVi,
+        imageUrls: parseImages(s.ImageUrl),
         imageUrl: s.ImageUrl, openingHours: s.OpeningHours, phone: s.Phone,
-          latitude: s.Latitude, longitude: s.Longitude
+        latitude: s.Latitude, longitude: s.Longitude
       }))
     }));
 
@@ -247,7 +262,7 @@ app.post("/api/admin/login", async (req, res) => {
     await connectPool();
     const result = await pool.request().input("username", sql.NVarChar(100), username).query("SELECT * FROM Admins WHERE Username = @username");
     const admin = result.recordset[0];
-    
+
     if (!admin) return res.status(401).json({ error: "Sai tài khoản hoặc mật khẩu" });
     const isMatch = await bcrypt.compare(password, admin.PasswordHash);
     if (!isMatch) return res.status(401).json({ error: "Sai tài khoản hoặc mật khẩu" });
@@ -292,7 +307,7 @@ app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
     await connectPool();
     const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters } = req.body;
     const newId = "poi_" + Math.floor(1000 + Math.random() * 9000);
-    
+
     let newImages = [];
     if (req.files && req.files.length > 0) {
       newImages = req.files.map(f => `/uploads/${f.filename}`);
@@ -325,7 +340,7 @@ app.put("/api/admin/pois/:id", upload.array("images", 10), async (req, res) => {
 
   try {
     await connectPool();
-    
+
     // Lấy các ảnh cũ được giữ lại
     let finalImages = [];
     try {
@@ -404,9 +419,9 @@ app.get("/api/shopkeeper/verify/:claimCode", async (req, res) => {
     await connectPool();
     const cleanClaimCode = req.params.claimCode.trim();
     const result = await pool.request().input("claimCode", sql.NVarChar(50), cleanClaimCode).query("SELECT * FROM Shopkeepers WHERE ClaimCode = @claimCode");
-    
+
     if (result.recordset.length === 0) return res.status(404).json({ error: "Mã không tồn tại trong DB." });
-    
+
     const shop = result.recordset[0];
     if (shop.Status !== 'approved') return res.status(403).json({ error: `Quán chưa được duyệt (Trạng thái: ${shop.Status}).` });
 
@@ -422,7 +437,7 @@ app.put("/api/shopkeeper/update/:claimCode", upload.array("images", 10), async (
 
   try {
     await connectPool();
-    
+
     let finalImages = [];
     try {
       finalImages = JSON.parse(keptImages || "[]");
@@ -458,7 +473,7 @@ app.put("/api/shopkeeper/update/:claimCode", upload.array("images", 10), async (
 
 app.post("/api/shopkeeper/register", upload.single("image"), async (req, res) => {
   const { poiId, name, descriptionVi, openingHours, phone, latitude, longitude, paymentMethod } = req.body;
-  
+
   if (!poiId || !name || !latitude || !longitude) {
     return res.status(400).json({ error: "Vui lòng nhập đủ thông tin và chọn vị trí trên bản đồ." });
   }
@@ -466,7 +481,7 @@ app.post("/api/shopkeeper/register", upload.single("image"), async (req, res) =>
   try {
     const shopId = "shop_" + Math.floor(1000 + Math.random() * 9000);
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-    
+
     const shopData = { id: shopId, poiId, name, descriptionVi: descriptionVi || "", openingHours: openingHours || "", phone: phone || "", latitude, longitude, imageUrl };
 
     if (paymentMethod === "cash") {
@@ -488,7 +503,7 @@ app.post("/api/shopkeeper/register", upload.single("image"), async (req, res) =>
       return res.json({ success: true, message: "Chờ Admin duyệt thanh toán tiền mặt" });
     } else {
       const claimCode = "CLAIM-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-      
+
       await connectPool();
       await pool.request()
         .input("id", sql.VarChar(50), shopId)
@@ -505,7 +520,7 @@ app.post("/api/shopkeeper/register", upload.single("image"), async (req, res) =>
           INSERT INTO Shopkeepers (Id, PoiId, Name, DescriptionVi, OpeningHours, Phone, ImageUrl, Latitude, Longitude, ClaimCode, Status, IsClaimed)
           VALUES (@id, @poiId, @name, @desc, @hours, @phone, @img, @lat, @lng, @claimCode, 'pending_vnpay', 1)
         `);
-      return res.json({ success: true, tempVnpayRef: claimCode }); 
+      return res.json({ success: true, tempVnpayRef: claimCode });
     }
   } catch (err) {
     console.error("[POST /api/shopkeeper/register]", err);
@@ -605,7 +620,7 @@ app.get('/api/payment/vnpay-return', async (req, res) => {
       } else {
         await pool.request().input("token", sql.VarChar(36), txnRef).query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
       }
-    } catch (e) {}
+    } catch (e) { }
 
     res.send(`
       <html>

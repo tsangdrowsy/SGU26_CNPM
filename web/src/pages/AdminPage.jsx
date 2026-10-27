@@ -22,18 +22,24 @@ export default function AdminPage() {
         latitude: "", longitude: "", radiusMeters: 20,
     });
 
-    // 👈 STATE CHO QUẢN LÝ ẢNH
     const [existingImages, setExistingImages] = useState([]);
     const [newImageFiles, setNewImageFiles] = useState([]);
 
+    // Hàm xử lý URL ảnh an toàn
+    const getImageUrl = (img) => {
+        if (!img) return "https://via.placeholder.com/400x200?text=No+Image";
+        return img.startsWith("http") ? img : `${API_BASE}${img}`;
+    };
+
     const loadData = async () => {
         try {
+            // 👈 Thêm ?t=${Date.now()} để chống cache API
             const [statsRes, tokensRes, poisRes, allShopsRes, pendingShopsRes] = await Promise.all([
-                axios.get(`${API_BASE}/api/admin/stats`),
-                axios.get(`${API_BASE}/api/admin/tokens`),
-                axios.get(`${API_BASE}/api/pois`),
-                axios.get(`${API_BASE}/api/admin/shopkeepers`).catch(() => ({ data: { shops: [] } })),
-                axios.get(`${API_BASE}/api/admin/shopkeeper/pending`).catch(() => ({ data: { shops: [] } }))
+                axios.get(`${API_BASE}/api/admin/stats?t=${Date.now()}`),
+                axios.get(`${API_BASE}/api/admin/tokens?t=${Date.now()}`),
+                axios.get(`${API_BASE}/api/pois?t=${Date.now()}`),
+                axios.get(`${API_BASE}/api/admin/shopkeepers?t=${Date.now()}`).catch(() => ({ data: { shops: [] } })),
+                axios.get(`${API_BASE}/api/admin/shopkeeper/pending?t=${Date.now()}`).catch(() => ({ data: { shops: [] } }))
             ]);
 
             if (statsRes.data) setStats(statsRes.data);
@@ -98,11 +104,8 @@ export default function AdminPage() {
 
         const data = new FormData();
         Object.keys(formData).forEach(key => data.append(key, formData[key]));
-        
-        // 👈 Gửi mảng ảnh cũ được giữ lại
         data.append("keptImages", JSON.stringify(existingImages));
 
-        // 👈 Gửi file ảnh mới
         if (newImageFiles && newImageFiles.length > 0) {
             for (let i = 0; i < newImageFiles.length; i++) {
                 data.append("images", newImageFiles[i]);
@@ -130,8 +133,6 @@ export default function AdminPage() {
         }
     };
 
-
-    // HÀM DUYỆT QUÁN
     const handleApproveShop = async (shop) => {
         const isVnpay = shop.Status === 'pending_vnpay';
         const confirmMsg = isVnpay
@@ -149,10 +150,9 @@ export default function AdminPage() {
         }
     };
 
-    // --- RENDER GIAO DIỆN ---
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8">
-            {/* Header */}
+            {/* Header & Stats giữ nguyên */}
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
                 <div className="flex items-center gap-4">
@@ -163,7 +163,6 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* 1. Thẻ thống kê */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500 font-medium">Tổng số Token đã tạo</p>
@@ -180,7 +179,7 @@ export default function AdminPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* 2. Bảng Token */}
+                {/* Bảng Token giữ nguyên */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h2 className="text-xl font-bold mb-4">Token đang hoạt động</h2>
                     <div className="overflow-y-auto max-h-[400px]">
@@ -212,7 +211,7 @@ export default function AdminPage() {
                     </div>
                 </div>
 
-                {/* 3. Form Thêm/Sửa POI */}
+                {/* Form Thêm/Sửa POI */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold flex items-center gap-2">
@@ -226,13 +225,10 @@ export default function AdminPage() {
                         )}
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        
-                        {/* 👈 CÁC Ô NHẬP LIỆU ĐÃ ĐƯỢC KHÔI PHỤC ĐẦY ĐỦ */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Tên địa điểm</label>
                             <input required name="name" value={formData.name} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
                         </div>
-                        
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Vĩ độ (Lat)</label>
@@ -243,39 +239,34 @@ export default function AdminPage() {
                                 <input required type="number" step="any" name="longitude" value={formData.longitude} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
                             </div>
                         </div>
-                        
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả ngắn (Tiếng Việt)</label>
                             <textarea required name="shortDescriptionVi" value={formData.shortDescriptionVi} onChange={handleInputChange} rows="2" className="w-full border p-2 rounded-lg" />
                         </div>
-                        
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả đầy đủ (Dùng cho RAG)</label>
                             <textarea required name="fullDescriptionVi" value={formData.fullDescriptionVi} onChange={handleInputChange} rows="3" className="w-full border p-2 rounded-lg" />
                         </div>
-                        
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Bán kính kích hoạt (mét)</label>
                             <input required type="number" name="radiusMeters" value={formData.radiusMeters} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
                         </div>
 
-                        {/* 👈 GIAO DIỆN QUẢN LÝ ẢNH MỚI */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                                 <ImageIcon size={16} /> Hình ảnh địa điểm
                             </label>
                             <div className="grid grid-cols-3 gap-3">
-                                {/* Hiển thị ảnh cũ */}
                                 {existingImages.map((img, idx) => (
                                     <div key={`old-${idx}`} className="relative group aspect-square">
-                                        <img src={`${API_BASE}${img}`} alt="POI" className="w-full h-full object-cover rounded-lg border border-gray-200" />
+                                        {/* 👈 Dùng getImageUrl để hiển thị đúng link */}
+                                        <img src={getImageUrl(img)} alt="POI" className="w-full h-full object-cover rounded-lg border border-gray-200" />
                                         <button type="button" onClick={() => removeExistingImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
                                             <X size={14} />
                                         </button>
                                     </div>
                                 ))}
 
-                                {/* Hiển thị ảnh mới chọn */}
                                 {newImageFiles.map((file, idx) => (
                                     <div key={`new-${idx}`} className="relative group aspect-square">
                                         <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover rounded-lg border-2 border-orange-400" />
@@ -285,7 +276,6 @@ export default function AdminPage() {
                                     </div>
                                 ))}
 
-                                {/* Nút Thêm ảnh */}
                                 <label className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition aspect-square">
                                     <PlusCircle className="text-gray-400 mb-1" size={24} />
                                     <span className="text-xs text-gray-500">Thêm ảnh</span>
@@ -301,10 +291,10 @@ export default function AdminPage() {
                 </div>
             </div>
 
-
-            {/* 4. Duyệt Cửa hàng mới */}
+            {/* Duyệt Cửa hàng mới, Danh sách POI, Tất cả Cửa hàng */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h2 className="text-xl font-bold mb-4">Duyệt Cửa hàng mới</h2>
+                {/* ... */}
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-gray-50">
@@ -341,7 +331,6 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* 5. Danh sách POI */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                     <MapPin className="text-blue-500" /> Danh sách Địa điểm hiện có ({pois.length})
@@ -353,7 +342,7 @@ export default function AdminPage() {
                             <div key={poi.id} className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition">
                                 <div className="h-40 bg-gray-100 relative">
                                     {firstImg ? (
-                                        <img src={`${API_BASE}${firstImg}`} alt={poi.name} className="w-full h-full object-cover" onError={(e) => { e.target.src = "https://via.placeholder.com/400x200?text=No+Image"; }} />
+                                        <img src={getImageUrl(firstImg)} alt={poi.name} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="flex items-center justify-center h-full text-gray-400"><ImageIcon size={32} /></div>
                                     )}
@@ -379,7 +368,6 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* 6. Tất cả Cửa hàng */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-8">
                 <h2 className="text-xl font-bold mb-4">Tất cả Cửa hàng đã đăng ký</h2>
                 <div className="overflow-x-auto">

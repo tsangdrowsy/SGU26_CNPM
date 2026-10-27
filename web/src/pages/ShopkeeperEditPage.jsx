@@ -8,7 +8,7 @@ const API_BASE = "http://localhost:3000";
 export default function ShopkeeperEditPage() {
   const { code } = useParams();
   const navigate = useNavigate();
-
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -20,20 +20,24 @@ export default function ShopkeeperEditPage() {
   const [startHour, setStartHour] = useState("08");
   const [endHour, setEndHour] = useState("21");
   const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-
-  // 👈 STATE QUẢN LÝ ẢNH
+  
   const [existingImages, setExistingImages] = useState([]);
   const [newImageFiles, setNewImageFiles] = useState([]);
+
+  const getImageUrl = (img) => {
+    if (!img) return "https://via.placeholder.com/400x200?text=No+Image";
+    return img.startsWith("http") ? img : `${API_BASE}${img}`;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const poisRes = await axios.get(`${API_BASE}/api/pois`);
+        const poisRes = await axios.get(`${API_BASE}/api/pois?t=${Date.now()}`);
         setPois(poisRes.data.pois);
 
-        const res = await axios.get(`${API_BASE}/api/shopkeeper/verify/${code.trim()}`);
+        const res = await axios.get(`${API_BASE}/api/shopkeeper/verify/${code.trim()}?t=${Date.now()}`);
         const shop = res.data.shop;
-
+        
         let pStart = "08", pEnd = "21";
         if (shop.OpeningHours && shop.OpeningHours.includes(" - ")) {
           const parts = shop.OpeningHours.split(" - ");
@@ -51,16 +55,15 @@ export default function ShopkeeperEditPage() {
           poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : "")
         });
 
-        // 👈 Load ảnh cũ vào state
         let imgs = [];
         try {
           imgs = JSON.parse(shop.ImageUrl || "[]");
-          if (!Array.isArray(imgs)) imgs = [shop.ImageUrl]; // Fallback data cũ
+          if (!Array.isArray(imgs)) imgs = [shop.ImageUrl];
         } catch (e) {
           imgs = shop.ImageUrl ? [shop.ImageUrl] : [];
         }
         setExistingImages(imgs);
-
+        
       } catch (err) {
         setError(err.response?.data?.error || "Mã không hợp lệ hoặc không tìm thấy quán.");
       } finally {
@@ -89,11 +92,8 @@ export default function ShopkeeperEditPage() {
 
     const data = new FormData();
     Object.keys(formData).forEach(key => data.append(key, formData[key]));
-
-    // 👈 Gửi mảng ảnh cũ được giữ lại
     data.append("keptImages", JSON.stringify(existingImages));
 
-    // 👈 Gửi mảng ảnh mới
     if (newImageFiles && newImageFiles.length > 0) {
       for (let i = 0; i < newImageFiles.length; i++) {
         data.append("images", newImageFiles[i]);
@@ -111,7 +111,6 @@ export default function ShopkeeperEditPage() {
   };
 
   if (loading) return <div className="p-10 text-center">Đang tải dữ liệu...</div>;
-
   if (error && !formData.name) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -126,7 +125,6 @@ export default function ShopkeeperEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-2xl bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
-
         <div className="text-center mb-8 relative">
           <button onClick={() => navigate("/shopkeeper")} className="absolute left-0 top-2 text-gray-500 hover:text-orange-500">
             <ArrowLeft size={24} />
@@ -139,12 +137,11 @@ export default function ShopkeeperEditPage() {
         {error && <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-6 text-center">{error}</div>}
 
         <form onSubmit={handleUpdate} className="space-y-4">
-
           <div>
             <label className="block text-sm font-medium mb-1">Thuộc địa điểm (POI)</label>
-            <select
-              value={formData.poiId}
-              onChange={(e) => setFormData({ ...formData, poiId: e.target.value })}
+            <select 
+              value={formData.poiId} 
+              onChange={(e) => setFormData({...formData, poiId: e.target.value})} 
               className="w-full border p-3 rounded-lg bg-white"
             >
               {pois.map(p => (
@@ -155,35 +152,35 @@ export default function ShopkeeperEditPage() {
 
           <div>
             <label className="block text-sm font-medium mb-1">Tên cửa hàng</label>
-            <input required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full border p-3 rounded-lg" />
+            <input required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full border p-3 rounded-lg" />
           </div>
-
+          
           <div>
             <label className="block text-sm font-medium mb-1">Mô tả</label>
-            <textarea rows="3" value={formData.descriptionVi} onChange={(e) => setFormData({ ...formData, descriptionVi: e.target.value })} className="w-full border p-3 rounded-lg" />
+            <textarea rows="3" value={formData.descriptionVi} onChange={(e) => setFormData({...formData, descriptionVi: e.target.value})} className="w-full border p-3 rounded-lg" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Giờ mở cửa</label>
               <div className="flex items-center gap-2">
-                <select
-                  value={startHour}
+                <select 
+                  value={startHour} 
                   onChange={(e) => {
                     setStartHour(e.target.value);
-                    setFormData({ ...formData, openingHours: `${e.target.value}:00 - ${endHour}:00` });
-                  }}
+                    setFormData({...formData, openingHours: `${e.target.value}:00 - ${endHour}:00`});
+                  }} 
                   className="border p-3 rounded-lg bg-white w-full"
                 >
                   {hours.map(h => <option key={`start-${h}`} value={h}>{h}:00</option>)}
                 </select>
                 <span className="text-gray-500 font-bold">đến</span>
-                <select
-                  value={endHour}
+                <select 
+                  value={endHour} 
                   onChange={(e) => {
                     setEndHour(e.target.value);
-                    setFormData({ ...formData, openingHours: `${startHour}:00 - ${e.target.value}:00` });
-                  }}
+                    setFormData({...formData, openingHours: `${startHour}:00 - ${e.target.value}:00`});
+                  }} 
                   className="border p-3 rounded-lg bg-white w-full"
                 >
                   {hours.map(h => <option key={`end-${h}`} value={h}>{h}:00</option>)}
@@ -193,34 +190,32 @@ export default function ShopkeeperEditPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">Số điện thoại</label>
-              <input
-                value={formData.phone}
+              <input 
+                value={formData.phone} 
                 onChange={(e) => {
                   const onlyNums = e.target.value.replace(/\D/g, '');
-                  setFormData({ ...formData, phone: onlyNums });
-                }}
-                placeholder="0905..."
-                className="w-full border p-3 rounded-lg"
+                  setFormData({...formData, phone: onlyNums});
+                }} 
+                placeholder="0905..." 
+                className="w-full border p-3 rounded-lg" 
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+            <label className="block text-sm font-medium mb-2 flex items-center gap-2">
               <ImageIcon size={16} /> Hình ảnh quán
             </label>
             <div className="grid grid-cols-3 gap-3">
-              {/* Ảnh cũ */}
               {existingImages.map((img, idx) => (
                 <div key={`old-${idx}`} className="relative group aspect-square">
-                  <img src={`${API_BASE}${img}`} alt="Shop" className="w-full h-full object-cover rounded-lg border border-gray-200" />
+                  <img src={getImageUrl(img)} alt="Shop" className="w-full h-full object-cover rounded-lg border border-gray-200" />
                   <button type="button" onClick={() => removeExistingImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow-md">
                     <X size={14} />
                   </button>
                 </div>
               ))}
 
-              {/* Ảnh mới chọn */}
               {newImageFiles.map((file, idx) => (
                 <div key={`new-${idx}`} className="relative group aspect-square">
                   <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover rounded-lg border-2 border-orange-400" />
@@ -230,7 +225,6 @@ export default function ShopkeeperEditPage() {
                 </div>
               ))}
 
-              {/* Nút Thêm */}
               <label className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition aspect-square">
                 <PlusCircle className="text-gray-400 mb-1" size={24} />
                 <span className="text-xs text-gray-500">Thêm ảnh</span>

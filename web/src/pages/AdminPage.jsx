@@ -60,8 +60,17 @@ export default function AdminPage() {
         navigate("/admin/login");
     };
 
+    // 👈 HÀM XỬ LÝ NHẬP LIỆU (CHẶN CHỮ Ở Ô RADIUS)
     const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        
+        if (name === "radiusMeters") {
+            // Chỉ giữ lại các ký tự số (0-9), xóa sạch chữ, dấu trừ, dấu chấm
+            const onlyNums = value.replace(/[^0-9]/g, "");
+            setFormData({ ...formData, [name]: onlyNums });
+        } else {
+            setFormData({ ...formData, [name]: value });
+        }
     };
 
     const handleCancelEdit = () => {
@@ -104,6 +113,13 @@ export default function AdminPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // 👈 Kiểm tra lại lần cuối trước khi gửi lên server
+        if (!formData.radiusMeters || parseInt(formData.radiusMeters) <= 0) {
+            alert("Bán kính phải là số nguyên lớn hơn 0!");
+            return;
+        }
+
         setLoading(true);
 
         const data = new FormData();
@@ -253,10 +269,20 @@ export default function AdminPage() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Bán kính kích hoạt (mét)</label>
-                            <input required type="number" name="radiusMeters" value={formData.radiusMeters} onChange={handleInputChange} className="w-full border p-2 rounded-lg" />
+                            {/* 👈 SỬA INPUT RADIUS: text + numeric, lọc số âm, chữ */}
+                            <input 
+                                required 
+                                type="text" 
+                                inputMode="numeric"
+                                name="radiusMeters" 
+                                value={formData.radiusMeters} 
+                                onChange={handleInputChange} 
+                                className="w-full border p-2 rounded-lg" 
+                                placeholder="VD: 20"
+                            />
                         </div>
 
-                        {/* 👈 GIAO DIỆN QUẢN LÝ ẢNH ĐÃ ĐƯỢC SỬA */}
+                        {/* 👈 GIAO DIỆN QUẢN LÝ ẢNH */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                                 <ImageIcon size={16} /> Hình ảnh địa điểm
@@ -313,7 +339,7 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* Các phần còn lại giữ nguyên */}
+            {/* Duyệt Cửa hàng mới */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h2 className="text-xl font-bold mb-4">Duyệt Cửa hàng mới</h2>
                 <div className="overflow-x-auto">
@@ -349,6 +375,7 @@ export default function AdminPage() {
                 </div>
             </div>
 
+            {/* Danh sách POI */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                     <MapPin className="text-blue-500" /> Danh sách Địa điểm hiện có ({pois.length})
@@ -386,6 +413,7 @@ export default function AdminPage() {
                 </div>
             </div>
 
+            {/* Tất cả Cửa hàng */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-8">
                 <h2 className="text-xl font-bold mb-4">Tất cả Cửa hàng đã đăng ký</h2>
                 <div className="overflow-x-auto">

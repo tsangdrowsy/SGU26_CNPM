@@ -23,7 +23,7 @@ export default function ShopkeeperEditPage() {
   
   const [existingImages, setExistingImages] = useState([]);
   const [newImageFiles, setNewImageFiles] = useState([]);
-  const [mainImage, setMainImage] = useState(""); // 👈 Thêm state ảnh chính
+  const [mainImage, setMainImage] = useState(""); 
 
   const getImageUrl = (img) => {
     if (!img) return "https://via.placeholder.com/400x200?text=No+Image";
@@ -56,7 +56,7 @@ export default function ShopkeeperEditPage() {
           poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : "")
         });
 
-        // 👈 Parse ảnh cũ và ảnh chính
+        // Parse ảnh cũ và ảnh chính
         let imgs = [];
         try {
           imgs = JSON.parse(shop.GalleryImages || "[]");
@@ -97,7 +97,7 @@ export default function ShopkeeperEditPage() {
     const data = new FormData();
     Object.keys(formData).forEach(key => data.append(key, formData[key]));
     
-    // 👈 Gửi mảng ảnh cũ, ảnh chính và file mới
+    // Gửi mảng ảnh cũ, ảnh chính và file mới
     data.append("galleryImages", JSON.stringify(existingImages));
     data.append("mainImage", mainImage);
 
@@ -203,13 +203,14 @@ export default function ShopkeeperEditPage() {
                   const onlyNums = e.target.value.replace(/\D/g, '');
                   setFormData({...formData, phone: onlyNums});
                 }} 
+                inputMode="numeric"
+                maxLength={11}
                 placeholder="0905..." 
                 className="w-full border p-3 rounded-lg" 
               />
             </div>
           </div>
 
-          {/* 👈 GIAO DIỆN QUẢN LÝ ẢNH ĐÃ ĐƯỢC SỬA */}
           <div>
             <label className="block text-sm font-medium mb-2 flex items-center gap-2">
               <ImageIcon size={16} /> Hình ảnh quán

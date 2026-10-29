@@ -116,7 +116,7 @@ export default function AdminPage() {
         
         // 👈 Kiểm tra lại lần cuối trước khi gửi lên server
         if (!formData.radiusMeters || parseInt(formData.radiusMeters) <= 0) {
-            alert("Bán kính phải là số nguyên lớn hơn 0!");
+            alert("Bán kính phải là số nguyên lớn hơn 0 và bé hơn bằng 100!");
             return;
         }
 

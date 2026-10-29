@@ -51,48 +51,49 @@ CREATE TABLE Admins (
 );
 GO
 
--- 2.2. POIs (Points of Interest - Điểm tham quan)
 CREATE TABLE POIs (
-    Id VARCHAR(50) PRIMARY KEY, -- e.g., 'poi_001'
+    Id VARCHAR(50) PRIMARY KEY,
     Name NVARCHAR(255) NOT NULL,
     ShortDescriptionVi NVARCHAR(500) NOT NULL,
-    FullDescriptionVi NVARCHAR(MAX) NOT NULL, -- Dùng cho RAG Context (Flow 3)
-    Latitude DECIMAL(9, 6) NOT NULL,
-    Longitude DECIMAL(9, 6) NOT NULL,
-    RadiusMeters INT DEFAULT 20,
+    FullDescriptionVi NVARCHAR(MAX) NOT NULL, 
+    Latitude DECIMAL(9, 6) NOT NULL CHECK (Latitude >= -90 AND Latitude <= 90),   --  Vĩ độ phải từ -90 đến 90
+    Longitude DECIMAL(9, 6) NOT NULL CHECK (Longitude >= -180 AND Longitude <= 180), --  Kinh độ từ -180 đến 180
+    RadiusMeters INT DEFAULT 20 CHECK (RadiusMeters => 0 AND RadiusMeters<= 100),                         --  Bán kính phải lớn hơn bằng 0 và bé hơn bằng 100
     ImageUrl NVARCHAR(500),
-    GalleryImages NVARCHAR(MAX),
+    GalleryImages NVARCHAR(MAX) CHECK (GalleryImages IS NULL OR ISJSON(GalleryImages) = 1), --  Phải là chuỗi JSON hợp lệ
     CreatedAt DATETIME2 DEFAULT GETUTCDATE()
-);
-GO
 
--- 2.3. Shopkeepers (Quán ăn, cửa hàng gần POI)
 CREATE TABLE Shopkeepers (
-    Id VARCHAR(50) PRIMARY KEY, -- e.g., 'shop_001'
+    Id VARCHAR(50) PRIMARY KEY,
     PoiId VARCHAR(50) NOT NULL,
     Name NVARCHAR(255) NOT NULL,
     DescriptionVi NVARCHAR(1000),
     ImageUrl NVARCHAR(500),
-    GalleryImages NVARCHAR(MAX),
+    GalleryImages NVARCHAR(MAX) CHECK (GalleryImages IS NULL OR ISJSON(GalleryImages) = 1),
     OpeningHours NVARCHAR(100),
     Phone NVARCHAR(20),
-    ClaimCode NVARCHAR(50) UNIQUE, -- Magic link / Code để chủ quán claim (Flow 4)
+    ClaimCode NVARCHAR(50) UNIQUE,
     IsClaimed BIT DEFAULT 0,
+    
+    -- 👈 Các cột được thêm sau
+    Status VARCHAR(20) DEFAULT 'pending' CHECK (Status IN ('pending', 'approved', 'pending_vnpay')), -- Chỉ cho phép 3 trạng thái này
+    Latitude DECIMAL(9, 6) CHECK (Latitude >= -90 AND Latitude <= 90),
+    Longitude DECIMAL(9, 6) CHECK (Longitude >= -180 AND Longitude <= 180),
+    
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     FOREIGN KEY (PoiId) REFERENCES POIs(Id) ON DELETE CASCADE
 );
-GO
 
 -- 2.4. UnlockTokens (Thay thế Redis cho Flow 1: Token 24h)
 CREATE TABLE UnlockTokens (
-    Token VARCHAR(36) PRIMARY KEY, -- UUID v4
+    Token VARCHAR(36) PRIMARY KEY,
     CreatedByClerkId UNIQUEIDENTIFIER NOT NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    ExpiresAt DATETIME2 NOT NULL, -- Thời điểm hết hạn (VD: CreatedAt + 24h)
+    ExpiresAt DATETIME2 NOT NULL CHECK (ExpiresAt > CreatedAt), 
     IsUsed BIT DEFAULT 0,
+    Source VARCHAR(20) DEFAULT 'clerk' CHECK (Source IN ('clerk', 'vnpay')), 
     FOREIGN KEY (CreatedByClerkId) REFERENCES Clerks(Id)
 );
-GO
 
 -- Tăng kích thước cột lên để chứa được mảng JSON dài
 ALTER TABLE POIs ALTER COLUMN ImageUrl NVARCHAR(MAX);

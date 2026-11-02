@@ -65,3 +65,112 @@ GuideFriends/
 web/                  # Mã nguồn Web Portal (React Vite)
 │  └── src/pages/        # Admin, Clerk, Shopkeeper Pages
 
+```
+## Hướng Dẫn Cài Đặt & Chạy Dự Án
+### 1. Chuẩn bị Database (SQL Server)
+Mở SQL Server Management Studio (SSMS).
+
+Chạy toàn bộ script trong file GuideFriendsDB.sql (hoặc file .sql chứa Schema mới nhất).
+
+Đảm bảo Database GuideFriendsDB đã được tạo và có dữ liệu mẫu (POIs, Shopkeepers).
+
+### 2. Cài đặt Backend (server)
+Mở terminal, di chuyển vào thư mục server:
+
+```
+cd server
+npm install
+```
+Tạo file .env trong thư mục server/ với nội dung sau (thay thế bằng thông tin của bạn):
+
+env
+PORT=3000
+DB_SERVER=localhost
+DB_PORT=1433
+DB_USER=sa
+DB_PASSWORD=YourStrong!Passw0rd
+DB_NAME=GuideFriendsDB
+
+# Gemini API
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.0-flash
+
+# VNPAY Sandbox
+VNPAY_TMN_CODE=your_tmn_code
+VNPAY_HASH_SECRET=your_hash_secret
+VNPAY_RETURN_URL=https://your-ngrok-url.ngrok-free.dev/api/payment/vnpay-return
+Khởi động Server:
+
+```
+
+npm start
+```
+(Server sẽ chạy ở http://localhost:3000)
+
+### 3. Cài đặt Web Portal (web)
+Mở terminal mới, di chuyển vào thư mục web:
+```
+
+cd web
+npm install
+```
+Chạy giao diện web:
+```
+
+npm run dev
+```
+Truy cập http://localhost:5173/admin hoặc /clerk để test.
+
+### 4. Cài đặt Mobile App
+Cập nhật đường dẫn API trong file src/api/pois.ts:
+
+Nếu chạy Emulator Android: http://10.0.2.2:3000
+
+Nếu chạy iOS Simulator/Web: http://localhost:3000
+
+Nếu test trên điện thoại thật: Dùng IP LAN (VD: http://192.168.1.x:3000) hoặc link Ngrok.
+
+## Khởi động app:
+```
+
+npx expo start
+```
+Bấm a (Android) hoặc i (iOS) để mở app trên máy ảo.
+
+ Các Luồng Nghiệp Vụ (Flows) Để Test
+###Flow 1: Mở khóa App (Clerk)
+Vào web /clerk, bấm Tạo mã 24H để lấy một mã 6 ký tự (VD: A1B2C3).
+
+Mở Mobile App, nhập mã đó vào màn hình Unlock.
+
+App sẽ lưu mã vào AsyncStorage, tự động đăng nhập vào bản đồ.
+
+###Flow 2: Thuyết minh tự động (Geofencing & AI)
+Trong App Mobile, bấm vào thanh Simulator Chips ở dưới cùng (VD: chọn "Chùa Linh Ứng").
+
+Vị trí GPS sẽ nhảy đến POI đó.
+
+App sẽ gọi Gemini API để dịch mô tả sang ngôn ngữ đã chọn (mặc định là tiếng Anh).
+
+Giao diện hiện chữ và phát âm thanh qua expo-speech.
+
+###Flow 3: Chatbot AI
+Tại màn hình POI, bấm nút Chat.
+
+Hỏi một câu hỏi (VD: "Chùa xây năm nào?").
+
+AI sẽ trả lời dựa trên dữ liệu lấy từ DB.
+
+###Flow 4: Thanh toán VNPAY
+Mở App Mobile -> Bấm Exit -> Chọn Thanh toán VNPAY.
+
+Trình duyệt mở ra cổng VNPAY Sandbox. Dùng thẻ test (NCB: 9704198526191432198, OTP: 123456) để thanh toán.
+
+Hệ thống nhận IPN -> Tự động chuyển hướng vào bản đồ.
+
+## Lưu ý quan trọng khi phát triển
+Ngrok: Nếu test thanh toán VNPAY, bắt buộc phải bật Ngrok (ngrok http 3000) và cập nhật link Ngrok mới vào file .env và cấu hình trên trang Merchant của VNPAY.
+
+Gemini API Rate Limit: Gói Free Tier có giới hạn (thường là 15 RPM). Nếu gặp lỗi 429, hãy chờ 1 phút hoặc đổi model sang gemini-1.5-flash / gemini-2.0-flash.
+
+Lỗi ảnh trắng: Khi chạy trên Web qua Ngrok, nếu ảnh không hiển thị, hãy thêm param ?ngrok-skip-browser-warning=true vào URL của ảnh (đã được xử lý sẵn trong code).

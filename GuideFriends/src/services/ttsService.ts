@@ -13,14 +13,15 @@ export function localeFor(lang: string): string {
   return VOICE_MAP[lang] ?? "en-US";
 }
 
-export function speak(text: string, lang: string): Promise<void> {
+export function speak(text: string, lang: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
     Speech.speak(text, {
       language: localeFor(lang),
       rate: 0.9,
       pitch: 1.0,
-      onDone: () => resolve(),
-      onStopped: () => resolve(),
+      onDone: () => resolve(true),   
+      onStopped: () => resolve(false), 
+     
       onError: (error) => reject(error),
     });
   });

@@ -38,7 +38,7 @@ const ImageGallery = ({ imageUrls }: { imageUrls?: string[] }) => {
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ gap: 12, paddingVertical: 16, paddingHorizontal: 16 }}
-      // Không dùng pagingEnabled để tránh việc ảnh bị ép khuôn
+    // Không dùng pagingEnabled để tránh việc ảnh bị ép khuôn
     >
       {images.map((img, idx) => (
         <Image
@@ -77,16 +77,16 @@ export default function MapScreen() {
   const [translatedDesc, setTranslatedDesc] = useState({ short: "", full: "" });
   const [isTranslating, setIsTranslating] = useState(false);
 
-  const [selectedShop, setSelectedShop] = useState<Shopkeeper | null>(null); 
+  const [selectedShop, setSelectedShop] = useState<Shopkeeper | null>(null);
   const [translatedShopDesc, setTranslatedShopDesc] = useState("");
   const [isTranslatingShop, setIsTranslatingShop] = useState(false);
-  const [panToLocation, setPanToLocation] = useState<{ latitude: number, longitude: number } | null>(null); 
+  const [panToLocation, setPanToLocation] = useState<{ latitude: number, longitude: number } | null>(null);
 
   const displayPoi = selectedPoi ?? nearbyPoi;
 
   const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const currentHeightRef = useRef(COLLAPSED_HEIGHT);
-  
+
 
   useEffect(() => {
     const id = animatedHeight.addListener(({ value }) => { currentHeightRef.current = value; });
@@ -201,7 +201,18 @@ export default function MapScreen() {
     try {
       let text = (displayPoi?.id === poi.id && translatedDesc.short) ? translatedDesc.short : await translateText(poi.shortDescriptionVi, currentLanguage);
       setTtsState("speaking"); await speak(text, currentLanguage); setTtsState("idle");
-    } catch (e) { setTtsState("idle"); }
+      const isSuccess = await speak(text, currentLanguage);
+      if (isSuccess) {
+        console.log("hello");
+
+      }
+      setTtsState("idle");
+    } catch (e: any) {
+      console.log("Hello Hello", e);
+    } finally {
+      setTtsState("idle");
+    }
+
   }, [currentLanguage, displayPoi, translatedDesc.short]);
 
   useEffect(() => {
@@ -245,7 +256,7 @@ export default function MapScreen() {
         return;
       }
       setLocationStatus("active");
-      
+
       // Lấy GPS thật
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const newCoords = {
@@ -253,7 +264,7 @@ export default function MapScreen() {
         longitude: pos.coords.longitude,
         accuracy: pos.coords.accuracy ?? 15,
       };
-      
+
       // Cập nhật vị trí và ra lệnh cho bản đồ bay tới đó
       setUserCoords(newCoords);
       setPanToLocation({ latitude: newCoords.latitude, longitude: newCoords.longitude });
@@ -274,7 +285,7 @@ export default function MapScreen() {
           onPoiSelected={(poi) => { setSelectedPoi(poi); setSelectedShop(null); }}
           onShopSelected={(shop) => handleShopClick(shop)}
           onMapTap={handleMapTap}
-          onLocateMe={handleLocateMe} 
+          onLocateMe={handleLocateMe}
         />
 
         {locationStatus === "denied" && !simMode && (
@@ -338,7 +349,7 @@ export default function MapScreen() {
             </View>
 
             <ScrollView style={styles.cardScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}>
-              
+
               {selectedShop ? (
                 <View>
                   {/* 👈 Dùng ImageGallery thay vì Carousel */}

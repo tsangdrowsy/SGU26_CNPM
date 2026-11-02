@@ -138,14 +138,14 @@ npx expo start
 Bấm a (Android) hoặc i (iOS) để mở app trên máy ảo.
 
  Các Luồng Nghiệp Vụ (Flows) Để Test
-###Flow 1: Mở khóa App (Clerk)
+### Flow 1: Mở khóa App (Clerk)
 Vào web /clerk, bấm Tạo mã 24H để lấy một mã 6 ký tự (VD: A1B2C3).
 
 Mở Mobile App, nhập mã đó vào màn hình Unlock.
 
 App sẽ lưu mã vào AsyncStorage, tự động đăng nhập vào bản đồ.
 
-###Flow 2: Thuyết minh tự động (Geofencing & AI)
+### Flow 2: Thuyết minh tự động (Geofencing & AI)
 Trong App Mobile, bấm vào thanh Simulator Chips ở dưới cùng (VD: chọn "Chùa Linh Ứng").
 
 Vị trí GPS sẽ nhảy đến POI đó.
@@ -154,7 +154,7 @@ App sẽ gọi Gemini API để dịch mô tả sang ngôn ngữ đã chọn (m�
 
 Giao diện hiện chữ và phát âm thanh qua expo-speech.
 
-###Flow 3: Chatbot AI
+### Flow 3: Chatbot AI
 Tại màn hình POI, bấm nút Chat.
 
 Hỏi một câu hỏi (VD: "Chùa xây năm nào?").

@@ -161,7 +161,7 @@ Hỏi một câu hỏi (VD: "Chùa xây năm nào?").
 
 AI sẽ trả lời dựa trên dữ liệu lấy từ DB.
 
-###Flow 4: Thanh toán VNPAY
+### Flow 4: Thanh toán VNPAY
 Mở App Mobile -> Bấm Exit -> Chọn Thanh toán VNPAY.
 
 Trình duyệt mở ra cổng VNPAY Sandbox. Dùng thẻ test (NCB: 9704198526191432198, OTP: 123456) để thanh toán.

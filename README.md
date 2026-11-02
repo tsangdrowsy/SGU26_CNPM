@@ -91,11 +91,11 @@ DB_USER=sa
 DB_PASSWORD=YourStrong!Passw0rd
 DB_NAME=GuideFriendsDB
 
-# Gemini API
+ Gemini API
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.0-flash
 
-# VNPAY Sandbox
+ VNPAY Sandbox
 VNPAY_TMN_CODE=your_tmn_code
 VNPAY_HASH_SECRET=your_hash_secret
 VNPAY_RETURN_URL=https://your-ngrok-url.ngrok-free.dev/api/payment/vnpay-return

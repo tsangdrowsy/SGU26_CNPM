@@ -116,14 +116,14 @@ app.get("/api/pois", async (_req, res) => {
     const finalPois = pois.map(poi => ({
       ...poi,
       shopkeepers: shops.filter(s => s.PoiId === poi.id).map(s => ({
-        id: s.Id, 
-        name: s.Name, 
+        id: s.Id,
+        name: s.Name,
         descriptionVi: s.DescriptionVi,
         imageUrl: s.ImageUrl, // Ảnh chính
         imageUrls: parseImages(s.GalleryImages), // Mảng Gallery
-        openingHours: s.OpeningHours, 
+        openingHours: s.OpeningHours,
         phone: s.Phone,
-        latitude: s.Latitude, 
+        latitude: s.Latitude,
         longitude: s.Longitude
       }))
     }));
@@ -243,11 +243,20 @@ app.post("/api/auth/validate-token", async (req, res) => {
 
   try {
     await connectPool();
+    // 1. Kiểm tra mã có tồn tại, chưa hết hạn và ĐANG ACTIVE (IsUsed = 0) không
     const result = await pool.request()
       .input("token", sql.VarChar(36), token)
       .query(`SELECT Token, ExpiresAt FROM UnlockTokens WHERE Token = @token AND ExpiresAt > GETUTCDATE() AND IsUsed = 0`);
 
-    if (result.recordset.length === 0) return res.status(401).json({ error: "Mã không hợp lệ hoặc đã hết hạn." });
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ error: "Mã không hợp lệ hoặc đã hết hạn." });
+    }
+
+    // 👈 BỎ COMMENT DÒNG NÀY: Đổi trạng thái thành đã dùng (1)
+    await pool.request()
+      .input("token", sql.VarChar(36), token)
+      .query(`UPDATE UnlockTokens SET IsUsed = 1 WHERE Token = @token`);
+
     res.json({ valid: true, message: "Mở khóa thành công!" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -331,7 +340,7 @@ app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
       .input("lat", sql.Decimal(9, 6), latitude)
       .input("lng", sql.Decimal(9, 6), longitude)
       .input("radius", sql.Int, radiusMeters || 20)
-      .input("imageUrl", sql.VarChar(500), finalMainImage) 
+      .input("imageUrl", sql.VarChar(500), finalMainImage)
       .input("gallery", sql.NVarChar(sql.MAX), galleryStr)
       .query(`
         INSERT INTO POIs (Id, Name, ShortDescriptionVi, FullDescriptionVi, Latitude, Longitude, RadiusMeters, ImageUrl, GalleryImages)
@@ -491,7 +500,7 @@ app.post("/api/shopkeeper/register", upload.array("images", 10), async (req, res
 
   try {
     const shopId = "shop_" + Math.floor(1000 + Math.random() * 9000);
-    
+
     let finalGallery = [];
     if (req.files && req.files.length > 0) {
       finalGallery = req.files.map(f => `/uploads/${f.filename}`);
@@ -499,13 +508,13 @@ app.post("/api/shopkeeper/register", upload.array("images", 10), async (req, res
     const galleryStr = JSON.stringify(finalGallery);
     const mainImg = finalGallery.length > 0 ? finalGallery[0] : null;
 
-    const shopData = { 
-      id: shopId, poiId, name, 
-      descriptionVi: descriptionVi || "", 
-      openingHours: openingHours || "", 
-      phone: phone || "", 
-      latitude, longitude, 
-      mainImg, galleryStr 
+    const shopData = {
+      id: shopId, poiId, name,
+      descriptionVi: descriptionVi || "",
+      openingHours: openingHours || "",
+      phone: phone || "",
+      latitude, longitude,
+      mainImg, galleryStr
     };
 
     if (paymentMethod === "cash") {
@@ -564,6 +573,7 @@ app.post("/api/payment/create-vnpay-url", async (req, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const clerk = (await pool.request().query("SELECT TOP 1 Id FROM Clerks")).recordset[0];
 
+    // Lưu token với trạng thái IsUsed = 1 (Pending thanh toán)
     await pool.request()
       .input("token", sql.VarChar(36), token)
       .input("clerkId", sql.UniqueIdentifier, clerk.Id)
@@ -607,21 +617,38 @@ app.post("/api/payment/create-shop-vnpay", async (req, res) => {
   }
 });
 
+// 👈 ĐÃ SỬA: Thêm log, xử lý thanh toán thất bại (xóa token) để App không polling nữa
 app.get('/api/payment/vnpay-ipn', async (req, res) => {
+  console.log("🔥 [VNPAY IPN] Nhận tín hiệu:", req.query);
   try {
     const verify = vnpay.verifyIpnCall(req.query);
 
-    if (!verify.isVerified) return res.json({ RspCode: '97', Message: 'Invalid signature' });
-    if (!verify.isSuccess) return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    if (!verify.isVerified) {
+      console.log("❌ [VNPAY IPN] Sai chữ ký (Invalid signature)");
+      return res.json({ RspCode: '97', Message: 'Invalid signature' });
+    }
 
+    if (!verify.isSuccess) {
+      console.log("⚠️ [VNPAY IPN] Giao dịch thất bại hoặc bị hủy. Code:", req.query.vnp_ResponseCode);
+      // Xóa token Pending để giải phóng bộ nhớ, App sẽ nhận lỗi 404 và dừng polling
+      await connectPool();
+      await pool.request()
+        .input("token", sql.VarChar(36), verify.vnp_TxnRef)
+        .query("DELETE FROM UnlockTokens WHERE Token = @token");
+      return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    }
+
+    // Thanh toán thành công
     const txnRef = verify.vnp_TxnRef;
     await connectPool();
 
     if (txnRef.startsWith('CLAIM-')) {
+      console.log(`✅ [VNPAY IPN] Duyệt quán ${txnRef} thành công!`);
       await pool.request()
         .input("claimCode", sql.NVarChar(50), txnRef)
         .query("UPDATE Shopkeepers SET Status = 'approved' WHERE ClaimCode = @claimCode");
     } else {
+      console.log(`✅ [VNPAY IPN] Kích hoạt vé ${txnRef} thành công!`);
       await pool.request()
         .input("token", sql.VarChar(36), txnRef)
         .query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
@@ -629,13 +656,16 @@ app.get('/api/payment/vnpay-ipn', async (req, res) => {
 
     return res.json({ RspCode: '00', Message: 'Confirm Success' });
   } catch (err) {
+    console.error("❌ [VNPAY IPN] Lỗi:", err);
     return res.json({ RspCode: '99', Message: 'Unknown error' });
   }
 });
 
+// 👈 ĐÃ SỬA: Xử lý cả trường hợp thanh toán bị hủy
 app.get('/api/payment/vnpay-return', async (req, res) => {
   const responseCode = req.query.vnp_ResponseCode;
   const txnRef = req.query.vnp_TxnRef;
+  console.log("🔥 [VNPAY Return] Trình duyệt quay về với code:", responseCode);
 
   if (responseCode === '00' && txnRef) {
     try {
@@ -645,7 +675,10 @@ app.get('/api/payment/vnpay-return', async (req, res) => {
       } else {
         await pool.request().input("token", sql.VarChar(36), txnRef).query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
       }
-    } catch (e) { }
+      console.log(`✅ [VNPAY Return] Đã kích hoạt ${txnRef}`);
+    } catch (e) {
+      console.error("❌ [VNPAY Return] Lỗi DB:", e);
+    }
 
     res.send(`
       <html>
@@ -657,6 +690,13 @@ app.get('/api/payment/vnpay-return', async (req, res) => {
       </html>
     `);
   } else {
+    // Nếu hủy thanh toán, xóa token Pending
+    if (txnRef) {
+      try {
+        await connectPool();
+        await pool.request().input("token", sql.VarChar(36), txnRef).query("DELETE FROM UnlockTokens WHERE Token = @token");
+      } catch (e) { }
+    }
     res.send(`<h1 style="color: red; text-align: center; margin-top: 50px;">Thanh toán thất bại hoặc đã bị hủy!</h1>`);
   }
 });
@@ -665,7 +705,11 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().input("token", sql.VarChar(36), req.params.token).query("SELECT IsUsed FROM UnlockTokens WHERE Token = @token");
-    if (result.recordset.length === 0) return res.status(404).json({ error: "Not found" });
+
+    // 👈 Nếu token bị xóa (do hủy thanh toán), trả về 404
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: "Token không tồn tại hoặc đã bị hủy." });
+    }
 
     if (!result.recordset[0].IsUsed) {
       res.json({ status: "success" });
@@ -674,21 +718,5 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
-  }
-});
-
-// ---------- CATCH-ALL REACT ROUTER ----------
-app.get('*', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
-});
-
-// ---------- START SERVER ----------
-app.listen(process.env.PORT ?? 3000, async () => {
-  console.log(`[api] listening on http://0.0.0.0:${process.env.PORT ?? 3000}`);
-  try {
-    await connectPool();
-    console.log("[db] connection verified on startup");
-  } catch (e) {
-    console.error("[db] FAILED on startup:", e.message);
   }
 });

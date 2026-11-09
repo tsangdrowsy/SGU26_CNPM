@@ -7,6 +7,8 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import jwt from "jsonwebtoken";
+
 import { translateTextGemini, chatWithContext } from "./aiService.js";
 import { VNPay, ignoreLogger, ProductCode, VnpLocale } from 'vnpay';
 
@@ -41,6 +43,24 @@ app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 app.use(express.static(path.join(process.cwd(), "public")));
+
+const authenticateAdmin = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Unauthorized: No token provided" });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: "Forbidden: Admin access only" });
+    }
+    req.admin = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Unauthorized: Invalid token" });
+  }
+};
 
 // ---------- CẤU HÌNH DATABASE ----------
 const pool = new sql.ConnectionPool({
@@ -116,14 +136,14 @@ app.get("/api/pois", async (_req, res) => {
     const finalPois = pois.map(poi => ({
       ...poi,
       shopkeepers: shops.filter(s => s.PoiId === poi.id).map(s => ({
-        id: s.Id, 
-        name: s.Name, 
+        id: s.Id,
+        name: s.Name,
         descriptionVi: s.DescriptionVi,
         imageUrl: s.ImageUrl, // Ảnh chính
         imageUrls: parseImages(s.GalleryImages), // Mảng Gallery
-        openingHours: s.OpeningHours, 
+        openingHours: s.OpeningHours,
         phone: s.Phone,
-        latitude: s.Latitude, 
+        latitude: s.Latitude,
         longitude: s.Longitude
       }))
     }));
@@ -243,11 +263,19 @@ app.post("/api/auth/validate-token", async (req, res) => {
 
   try {
     await connectPool();
+    // 1. Kiểm tra mã có tồn tại, chưa hết hạn và ĐANG ACTIVE (IsUsed = 0) không
     const result = await pool.request()
       .input("token", sql.VarChar(36), token)
       .query(`SELECT Token, ExpiresAt FROM UnlockTokens WHERE Token = @token AND ExpiresAt > GETUTCDATE() AND IsUsed = 0`);
 
-    if (result.recordset.length === 0) return res.status(401).json({ error: "Mã không hợp lệ hoặc đã hết hạn." });
+    if (result.recordset.length === 0) {
+      return res.status(401).json({ error: "Mã không hợp lệ hoặc đã hết hạn." });
+    }
+
+    await pool.request()
+      .input("token", sql.VarChar(36), token)
+      .query(`UPDATE UnlockTokens SET IsUsed = 1 WHERE Token = @token`);
+
     res.json({ valid: true, message: "Mở khóa thành công!" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -270,13 +298,22 @@ app.post("/api/admin/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.PasswordHash);
     if (!isMatch) return res.status(401).json({ error: "Sai tài khoản hoặc mật khẩu" });
 
-    res.json({ success: true, message: "Đăng nhập thành công", adminName: admin.FullName });
-  } catch (err) {
+    //  TẠO JWT TOKEN (Hạn 1 ngày)
+    const token = jwt.sign(
+      { id: admin.Id, username: admin.Username, role: 'admin' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.json({ success: true, message: "Đăng nhập thành công", adminName: admin.FullName, token });
+  }
+  catch (err) {
+    console.error("[POST /api/admin/login]", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/api/admin/stats", async (req, res) => {
+app.get("/api/admin/stats", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const totalTokens = (await pool.request().query("SELECT COUNT(*) as count FROM UnlockTokens")).recordset[0].count;
@@ -289,7 +326,7 @@ app.get("/api/admin/stats", async (req, res) => {
   }
 });
 
-app.get("/api/admin/tokens", async (req, res) => {
+app.get("/api/admin/tokens", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().query(`
@@ -305,7 +342,7 @@ app.get("/api/admin/tokens", async (req, res) => {
   }
 });
 
-app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
+app.post("/api/admin/pois", authenticateAdmin, upload.array("images", 10), async (req, res) => {
   try {
     await connectPool();
     const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters, mainImage, galleryImages } = req.body;
@@ -331,7 +368,7 @@ app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
       .input("lat", sql.Decimal(9, 6), latitude)
       .input("lng", sql.Decimal(9, 6), longitude)
       .input("radius", sql.Int, radiusMeters || 20)
-      .input("imageUrl", sql.VarChar(500), finalMainImage) 
+      .input("imageUrl", sql.VarChar(500), finalMainImage)
       .input("gallery", sql.NVarChar(sql.MAX), galleryStr)
       .query(`
         INSERT INTO POIs (Id, Name, ShortDescriptionVi, FullDescriptionVi, Latitude, Longitude, RadiusMeters, ImageUrl, GalleryImages)
@@ -344,7 +381,7 @@ app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
   }
 });
 
-app.put("/api/admin/pois/:id", upload.array("images", 10), async (req, res) => {
+app.put("/api/admin/pois/:id", authenticateAdmin, upload.array("images", 10), async (req, res) => {
   const { id } = req.params;
   const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters, mainImage, galleryImages } = req.body;
 
@@ -389,7 +426,7 @@ app.put("/api/admin/pois/:id", upload.array("images", 10), async (req, res) => {
 // ==========================================
 // 5. SHOPKEEPER ROUTES
 // ==========================================
-app.get("/api/admin/shopkeepers", async (req, res) => {
+app.get("/api/admin/shopkeepers", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().query("SELECT * FROM Shopkeepers ORDER BY CreatedAt DESC");
@@ -399,7 +436,7 @@ app.get("/api/admin/shopkeepers", async (req, res) => {
   }
 });
 
-app.get("/api/admin/shopkeeper/pending", async (req, res) => {
+app.get("/api/admin/shopkeeper/pending", authenticateAdmin,async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().query("SELECT * FROM Shopkeepers WHERE Status IN ('pending', 'pending_vnpay') ORDER BY CreatedAt DESC");
@@ -409,7 +446,7 @@ app.get("/api/admin/shopkeeper/pending", async (req, res) => {
   }
 });
 
-app.post("/api/admin/shopkeeper/approve/:id", async (req, res) => {
+app.post("/api/admin/shopkeeper/approve/:id", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const shop = (await pool.request().input("id", sql.VarChar(50), req.params.id).query("SELECT ClaimCode FROM Shopkeepers WHERE Id = @id")).recordset[0];
@@ -422,7 +459,7 @@ app.post("/api/admin/shopkeeper/approve/:id", async (req, res) => {
   }
 });
 
-app.get("/api/shopkeeper/verify/:claimCode", async (req, res) => {
+app.get("/api/shopkeeper/verify/:claimCode",async (req, res) => {
   try {
     await connectPool();
     const cleanClaimCode = req.params.claimCode.trim();
@@ -439,7 +476,7 @@ app.get("/api/shopkeeper/verify/:claimCode", async (req, res) => {
   }
 });
 
-// 👈 SỬA LỖI TẠI ĐÂY: Cập nhật route cập nhật của Shopkeeper
+//  SỬA LỖI TẠI ĐÂY: Cập nhật route cập nhật của Shopkeeper
 app.put("/api/shopkeeper/update/:claimCode", upload.array("images", 10), async (req, res) => {
   const { claimCode } = req.params;
   const { name, descriptionVi, openingHours, phone, poiId, mainImage, galleryImages } = req.body;
@@ -481,7 +518,7 @@ app.put("/api/shopkeeper/update/:claimCode", upload.array("images", 10), async (
   }
 });
 
-// 👈 SỬA LỖI TẠI ĐÂY: Cập nhật route đăng ký của Shopkeeper
+//  SỬA LỖI TẠI ĐÂY: Cập nhật route đăng ký của Shopkeeper
 app.post("/api/shopkeeper/register", upload.array("images", 10), async (req, res) => {
   const { poiId, name, descriptionVi, openingHours, phone, latitude, longitude, paymentMethod } = req.body;
 
@@ -491,7 +528,7 @@ app.post("/api/shopkeeper/register", upload.array("images", 10), async (req, res
 
   try {
     const shopId = "shop_" + Math.floor(1000 + Math.random() * 9000);
-    
+
     let finalGallery = [];
     if (req.files && req.files.length > 0) {
       finalGallery = req.files.map(f => `/uploads/${f.filename}`);
@@ -499,13 +536,13 @@ app.post("/api/shopkeeper/register", upload.array("images", 10), async (req, res
     const galleryStr = JSON.stringify(finalGallery);
     const mainImg = finalGallery.length > 0 ? finalGallery[0] : null;
 
-    const shopData = { 
-      id: shopId, poiId, name, 
-      descriptionVi: descriptionVi || "", 
-      openingHours: openingHours || "", 
-      phone: phone || "", 
-      latitude, longitude, 
-      mainImg, galleryStr 
+    const shopData = {
+      id: shopId, poiId, name,
+      descriptionVi: descriptionVi || "",
+      openingHours: openingHours || "",
+      phone: phone || "",
+      latitude, longitude,
+      mainImg, galleryStr
     };
 
     if (paymentMethod === "cash") {
@@ -564,6 +601,7 @@ app.post("/api/payment/create-vnpay-url", async (req, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const clerk = (await pool.request().query("SELECT TOP 1 Id FROM Clerks")).recordset[0];
 
+    // Lưu token với trạng thái IsUsed = 1 (Pending thanh toán)
     await pool.request()
       .input("token", sql.VarChar(36), token)
       .input("clerkId", sql.UniqueIdentifier, clerk.Id)
@@ -607,21 +645,38 @@ app.post("/api/payment/create-shop-vnpay", async (req, res) => {
   }
 });
 
+// 👈 ĐÃ SỬA: Thêm log, xử lý thanh toán thất bại (xóa token) để App không polling nữa
 app.get('/api/payment/vnpay-ipn', async (req, res) => {
+  console.log("🔥 [VNPAY IPN] Nhận tín hiệu:", req.query);
   try {
     const verify = vnpay.verifyIpnCall(req.query);
 
-    if (!verify.isVerified) return res.json({ RspCode: '97', Message: 'Invalid signature' });
-    if (!verify.isSuccess) return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    if (!verify.isVerified) {
+      console.log("❌ [VNPAY IPN] Sai chữ ký (Invalid signature)");
+      return res.json({ RspCode: '97', Message: 'Invalid signature' });
+    }
 
+    if (!verify.isSuccess) {
+      console.log("⚠️ [VNPAY IPN] Giao dịch thất bại hoặc bị hủy. Code:", req.query.vnp_ResponseCode);
+      // Xóa token Pending để giải phóng bộ nhớ, App sẽ nhận lỗi 404 và dừng polling
+      await connectPool();
+      await pool.request()
+        .input("token", sql.VarChar(36), verify.vnp_TxnRef)
+        .query("DELETE FROM UnlockTokens WHERE Token = @token");
+      return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    }
+
+    // Thanh toán thành công
     const txnRef = verify.vnp_TxnRef;
     await connectPool();
 
     if (txnRef.startsWith('CLAIM-')) {
+      console.log(`✅ [VNPAY IPN] Duyệt quán ${txnRef} thành công!`);
       await pool.request()
         .input("claimCode", sql.NVarChar(50), txnRef)
         .query("UPDATE Shopkeepers SET Status = 'approved' WHERE ClaimCode = @claimCode");
     } else {
+      console.log(`✅ [VNPAY IPN] Kích hoạt vé ${txnRef} thành công!`);
       await pool.request()
         .input("token", sql.VarChar(36), txnRef)
         .query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
@@ -629,13 +684,16 @@ app.get('/api/payment/vnpay-ipn', async (req, res) => {
 
     return res.json({ RspCode: '00', Message: 'Confirm Success' });
   } catch (err) {
+    console.error("❌ [VNPAY IPN] Lỗi:", err);
     return res.json({ RspCode: '99', Message: 'Unknown error' });
   }
 });
 
+//  ĐÃ SỬA: Xử lý cả trường hợp thanh toán bị hủy
 app.get('/api/payment/vnpay-return', async (req, res) => {
   const responseCode = req.query.vnp_ResponseCode;
   const txnRef = req.query.vnp_TxnRef;
+  console.log("🔥 [VNPAY Return] Trình duyệt quay về với code:", responseCode);
 
   if (responseCode === '00' && txnRef) {
     try {
@@ -645,7 +703,10 @@ app.get('/api/payment/vnpay-return', async (req, res) => {
       } else {
         await pool.request().input("token", sql.VarChar(36), txnRef).query("UPDATE UnlockTokens SET IsUsed = 0 WHERE Token = @token");
       }
-    } catch (e) { }
+      console.log(`✅ [VNPAY Return] Đã kích hoạt ${txnRef}`);
+    } catch (e) {
+      console.error("❌ [VNPAY Return] Lỗi DB:", e);
+    }
 
     res.send(`
       <html>
@@ -657,6 +718,13 @@ app.get('/api/payment/vnpay-return', async (req, res) => {
       </html>
     `);
   } else {
+    // Nếu hủy thanh toán, xóa token Pending
+    if (txnRef) {
+      try {
+        await connectPool();
+        await pool.request().input("token", sql.VarChar(36), txnRef).query("DELETE FROM UnlockTokens WHERE Token = @token");
+      } catch (e) { }
+    }
     res.send(`<h1 style="color: red; text-align: center; margin-top: 50px;">Thanh toán thất bại hoặc đã bị hủy!</h1>`);
   }
 });
@@ -665,7 +733,11 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().input("token", sql.VarChar(36), req.params.token).query("SELECT IsUsed FROM UnlockTokens WHERE Token = @token");
-    if (result.recordset.length === 0) return res.status(404).json({ error: "Not found" });
+
+    //  Nếu token bị xóa (do hủy thanh toán), trả về 404
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: "Token không tồn tại hoặc đã bị hủy." });
+    }
 
     if (!result.recordset[0].IsUsed) {
       res.json({ status: "success" });
@@ -676,6 +748,9 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
 
 // ---------- CATCH-ALL REACT ROUTER ----------
 app.get('*', (req, res) => {

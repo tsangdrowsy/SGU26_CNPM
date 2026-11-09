@@ -15,7 +15,7 @@ import { colors } from "../theme/colors";
 import { getDistanceMeters } from "../features/map/geo";
 import MapCanvas from "../features/map/MapCanvas";
 import { UserLocation } from "../features/map/types";
-import { translateText, translateBatch } from "../services/translationService";
+import { translateBatch } from "../services/translationService"; // 👈 Chỉ cần translateBatch
 import { speak, stopSpeaking } from "../services/ttsService";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -29,22 +29,18 @@ const getSafeImageUrl = (imgPath?: string) => {
   return `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}ngrok-skip-browser-warning=true`;
 };
 
-// 👈 NÂNG CẤP GALLERY: Trượt ngang mượt mà, hiển thị một phần ảnh tiếp theo
 const ImageGallery = ({ imageUrls }: { imageUrls?: string[] }) => {
   const images = imageUrls && imageUrls.length > 0 ? imageUrls : [undefined];
-
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ gap: 12, paddingVertical: 16, paddingHorizontal: 16 }}
-    // Không dùng pagingEnabled để tránh việc ảnh bị ép khuôn
     >
       {images.map((img, idx) => (
         <Image
           key={idx}
           source={{ uri: getSafeImageUrl(img) }}
-          // Chiều rộng bằng 80% màn hình để lộ ảnh tiếp theo
           style={{ width: SCREEN_WIDTH * 0.8, height: 200, borderRadius: 16 }}
           resizeMode="cover"
         />
@@ -54,7 +50,6 @@ const ImageGallery = ({ imageUrls }: { imageUrls?: string[] }) => {
 };
 
 export default function MapScreen() {
-  // ... (Giữ nguyên toàn bộ state và logic cũ)
   const insets = useSafeAreaInsets();
   const locationSubscription = useRef<any>(null);
   const simModeRef = useRef(false);
@@ -74,19 +69,17 @@ export default function MapScreen() {
   const [ttsState, setTtsState] = useState<"idle" | "preparing" | "speaking">("idle");
   const [currentLanguage, setCurrentLanguage] = useState<LanguageCode>("en");
 
-  const [translatedDesc, setTranslatedDesc] = useState({ short: "", full: "" });
-  const [isTranslating, setIsTranslating] = useState(false);
+  // 👈 TỪ ĐIỂN DỊCH THUẬT (Lưu tất cả text đã dịch)
+  const [translationDict, setTranslationDict] = useState<Record<string, string>>({});
+  const [isPreTranslating, setIsPreTranslating] = useState(false);
 
   const [selectedShop, setSelectedShop] = useState<Shopkeeper | null>(null);
-  const [translatedShopDesc, setTranslatedShopDesc] = useState("");
-  const [isTranslatingShop, setIsTranslatingShop] = useState(false);
   const [panToLocation, setPanToLocation] = useState<{ latitude: number, longitude: number } | null>(null);
 
   const displayPoi = selectedPoi ?? nearbyPoi;
 
   const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const currentHeightRef = useRef(COLLAPSED_HEIGHT);
-
 
   useEffect(() => {
     const id = animatedHeight.addListener(({ value }) => { currentHeightRef.current = value; });
@@ -116,36 +109,7 @@ export default function MapScreen() {
     else snapTo(COLLAPSED_HEIGHT);
   }, [selectedPoi, selectedShop]);
 
-  useEffect(() => {
-    if (!displayPoi) { setTranslatedDesc({ short: "", full: "" }); return; }
-    let isMounted = true;
-    setIsTranslating(true);
-    const fetchAll = async () => {
-      const t = await translateBatch([displayPoi.shortDescriptionVi, displayPoi.fullDescriptionVi || ""], currentLanguage);
-      if (isMounted) { setTranslatedDesc({ short: t[0], full: t[1] }); setIsTranslating(false); }
-    };
-    fetchAll();
-    return () => { isMounted = false; };
-  }, [displayPoi, currentLanguage]);
-
-  const handleShopClick = async (shop: Shopkeeper) => {
-    setSelectedShop(shop);
-    if (shop.latitude && shop.longitude) {
-      setPanToLocation({ latitude: shop.latitude, longitude: shop.longitude });
-    }
-    setIsTranslatingShop(true);
-    const text = await translateText(shop.descriptionVi || "", currentLanguage);
-    setTranslatedShopDesc(text);
-    setIsTranslatingShop(false);
-  };
-
-  const handleMapTap = () => {
-    setSelectedPoi(null);
-    setSelectedShop(null);
-  };
-
-  useEffect(() => { simModeRef.current = simMode; }, [simMode]);
-
+  // 👈 EFFECT 1: TẢI DỮ LIỆU POI TỪ CACHE/API
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -164,6 +128,67 @@ export default function MapScreen() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // 👈 EFFECT 2: DỊCH TOÀN BỘ DỮ LIỆU 1 LẦN DUY NHẤT
+  useEffect(() => {
+    if (pois.length === 0) return;
+
+    const translateAll = async () => {
+      setIsPreTranslating(true);
+      let textsToTranslate: string[] = [];
+
+      // Gom tất cả text cần dịch từ POI, mô tả dài, và các Shop
+      pois.forEach((poi) => {
+        if (poi.shortDescriptionVi) textsToTranslate.push(poi.shortDescriptionVi);
+        if (poi.fullDescriptionVi) textsToTranslate.push(poi.fullDescriptionVi);
+        
+        poi.shopkeepers?.forEach((shop) => {
+          if (shop.descriptionVi) textsToTranslate.push(shop.descriptionVi);
+        });
+      });
+
+      // Loại bỏ các text trùng lặp để gửi đi ít hơn
+      textsToTranslate = [...new Set(textsToTranslate)];
+
+      if (textsToTranslate.length === 0) {
+        setIsPreTranslating(false);
+        return;
+      }
+
+      try {
+        // Gọi API Batch 1 lần duy nhất
+        const translatedArray = await translateBatch(textsToTranslate, currentLanguage);
+        
+        // Lưu vào từ điển
+        const newDict: Record<string, string> = {};
+        textsToTranslate.forEach((original, idx) => {
+          newDict[original] = translatedArray[idx];
+        });
+        
+        setTranslationDict(newDict);
+      } catch (e) {
+        console.log("Lỗi dịch toàn bộ:", e);
+      } finally {
+        setIsPreTranslating(false);
+      }
+    };
+
+    translateAll();
+  }, [pois, currentLanguage]); // Chạy khi tải xong POI hoặc khi đổi ngôn ngữ
+
+  const handleShopClick = (shop: Shopkeeper) => {
+    setSelectedShop(shop);
+    if (shop.latitude && shop.longitude) {
+      setPanToLocation({ latitude: shop.latitude, longitude: shop.longitude });
+    }
+  };
+
+  const handleMapTap = () => {
+    setSelectedPoi(null);
+    setSelectedShop(null);
+  };
+
+  useEffect(() => { simModeRef.current = simMode; }, [simMode]);
 
   useEffect(() => {
     AsyncStorage.getItem("app_language").then((saved) => { if (saved) setCurrentLanguage(saved as LanguageCode); });
@@ -196,37 +221,86 @@ export default function MapScreen() {
     visitedRef.current.add(id); setVisitedIds(Array.from(visitedRef.current));
   }, []);
 
+  // 👈 HÀM TTS MỚI: Đọc text từ Từ điển, chỉ gọi speak 1 lần
   const triggerTTS = useCallback(async (poi: POI) => {
-    await stopSpeaking(); setTtsState("preparing");
-    try {
-      let text = (displayPoi?.id === poi.id && translatedDesc.short) ? translatedDesc.short : await translateText(poi.shortDescriptionVi, currentLanguage);
-      setTtsState("speaking"); await speak(text, currentLanguage); setTtsState("idle");
-      const isSuccess = await speak(text, currentLanguage);
-      if (isSuccess) {
-        console.log("hello");
+    await stopSpeaking();
+    setTtsState("preparing");
 
+    try {
+      // Lấy text đã dịch từ Từ điển, nếu không có thì lấy text gốc
+      const text = translationDict[poi.shortDescriptionVi] || poi.shortDescriptionVi;
+
+      setTtsState("speaking");
+      const isSuccess = await speak(text, currentLanguage);
+      
+      if (isSuccess) {
+        console.log("Đọc thuyết minh thành công!");
       }
-      setTtsState("idle");
     } catch (e: any) {
-      console.log("Hello Hello", e);
+      console.log("Lỗi TTS:", e);
     } finally {
       setTtsState("idle");
     }
+  }, [currentLanguage, translationDict]);
 
-  }, [currentLanguage, displayPoi, translatedDesc.short]);
-
+  // 👈 GEOFENCE MỚI: Chặn giả lập (chỉ chạy khi dùng Real GPS)
   useEffect(() => {
     if (!userCoords || pois.length === 0) return;
-    const found = pois.find((poi) => getDistanceMeters(userCoords.latitude, userCoords.longitude, poi.location.latitude, poi.location.longitude) <= poi.radiusMeters + 5);
+
+    const found = pois.find(
+      (poi) =>
+        getDistanceMeters(
+          userCoords.latitude, userCoords.longitude,
+          poi.location.latitude, poi.location.longitude
+        ) <= poi.radiusMeters + 5
+    );
+
     setNearbyPoi(found ?? null);
-    if (found && !visitedRef.current.has(found.id)) { markVisited(found.id); triggerTTS(found); }
+
+    // Chỉ auto đọc nếu KHÔNG PHẢI giả lập
+    if (found && !simModeRef.current && !visitedRef.current.has(found.id)) {
+      markVisited(found.id);
+      triggerTTS(found);
+    }
   }, [userCoords, pois, triggerTTS, markVisited]);
 
-  const simulate = useCallback((lat: number, lng: number) => { simModeRef.current = true; setSimMode(true); setUserCoords({ latitude: lat, longitude: lng, accuracy: 5 }); }, []);
+  const simulate = useCallback((lat: number, lng: number) => { 
+    simModeRef.current = true; 
+    setSimMode(true); 
+    setUserCoords({ latitude: lat, longitude: lng, accuracy: 5 }); 
+  }, []);
+
   const resumeRealGps = useCallback(async () => {
-    simModeRef.current = false; setSimMode(false);
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 });
+    simModeRef.current = false; 
+    setSimMode(false);
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 });
+    } catch (e) {
+      console.log("Lỗi lấy GPS thật:", e);
+    }
+  }, []);
+
+  const handleLocateMe = useCallback(async () => {
+    simModeRef.current = false;
+    setSimMode(false);
+    try {
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") ({ status } = await Location.requestForegroundPermissionsAsync());
+      if (status !== "granted") { setLocationStatus("denied"); return; }
+      setLocationStatus("active");
+
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const newCoords = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy ?? 15,
+      };
+      setUserCoords(newCoords);
+      setPanToLocation({ latitude: newCoords.latitude, longitude: newCoords.longitude });
+    } catch (e) {
+      console.log("Locate me failed:", e);
+    }
   }, []);
 
   const distance = userCoords && displayPoi ? Math.round(getDistanceMeters(userCoords.latitude, userCoords.longitude, displayPoi.location.latitude, displayPoi.location.longitude)) : null;
@@ -243,36 +317,6 @@ export default function MapScreen() {
     router.push({ pathname: "/chat", params: { poiId: displayPoi.id, lang: currentLanguage } });
   };
 
-  const handleLocateMe = useCallback(async () => {
-    simModeRef.current = false; // Tắt chế độ giả lập
-    setSimMode(false);
-    try {
-      let { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== "granted") {
-        ({ status } = await Location.requestForegroundPermissionsAsync());
-      }
-      if (status !== "granted") {
-        setLocationStatus("denied");
-        return;
-      }
-      setLocationStatus("active");
-
-      // Lấy GPS thật
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const newCoords = {
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        accuracy: pos.coords.accuracy ?? 15,
-      };
-
-      // Cập nhật vị trí và ra lệnh cho bản đồ bay tới đó
-      setUserCoords(newCoords);
-      setPanToLocation({ latitude: newCoords.latitude, longitude: newCoords.longitude });
-    } catch (e) {
-      console.log("Locate me failed:", e);
-    }
-  }, []);
-
   return (
     <View style={styles.safeArea}>
       <View style={styles.container}>
@@ -287,6 +331,14 @@ export default function MapScreen() {
           onMapTap={handleMapTap}
           onLocateMe={handleLocateMe}
         />
+
+        {/* 👈 Hiển thị loading khi đang dịch toàn bộ dữ liệu */}
+        {isPreTranslating && (
+          <View style={[styles.preTranslateOverlay, { top: insets.top + 60 }]}>
+            <ActivityIndicator color={colors.accent} size="small" />
+            <Text style={{ color: "white", fontWeight: "bold", marginLeft: 8 }}>Loading translations...</Text>
+          </View>
+        )}
 
         {locationStatus === "denied" && !simMode && (
           <View style={[styles.deniedBanner, { top: insets.top + 60 }]}>
@@ -310,6 +362,9 @@ export default function MapScreen() {
                 <Text style={styles.simChipText}>{poi.name.split(" (")[0]}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity style={[styles.simChip, !simMode && styles.simChipActive]} onPress={resumeRealGps}>
+              <Text style={styles.simChipText}>Real GPS</Text>
+            </TouchableOpacity>
           </ScrollView>
 
           <Animated.View style={[styles.card, { height: animatedHeight }]}>
@@ -349,29 +404,33 @@ export default function MapScreen() {
             </View>
 
             <ScrollView style={styles.cardScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}>
-
+              
               {selectedShop ? (
                 <View>
-                  {/* 👈 Dùng ImageGallery thay vì Carousel */}
                   <ImageGallery imageUrls={selectedShop.imageUrls} />
-                  {isTranslatingShop ? (
-                    <ActivityIndicator size="large" color={colors.accent} style={{ marginTop: 20 }} />
-                  ) : (
-                    <Text style={styles.fullDescription}>{translatedShopDesc || selectedShop.descriptionVi}</Text>
-                  )}
+                  {/* 👈 SỬ DỤNG TỪ ĐIỂN ĐỂ HIỂN THỊ MÔ TẢ QUÁN */}
+                  <Text style={styles.fullDescription}>
+                    {translationDict[selectedShop.descriptionVi || ""] || selectedShop.descriptionVi}
+                  </Text>
                 </View>
               ) : (
                 displayPoi ? (
                   <>
-                    <Text style={styles.cardDescription}>{translatedDesc.short || displayPoi.shortDescriptionVi}</Text>
+                    {/* 👈 SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ NGẮN POI */}
+                    <Text style={styles.cardDescription}>
+                      {translationDict[displayPoi.shortDescriptionVi] || displayPoi.shortDescriptionVi}
+                    </Text>
+                    
                     {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}m</Text>}
 
-                    {/* 👈 Dùng ImageGallery thay vì Carousel */}
                     <ImageGallery imageUrls={displayPoi.imageUrls} />
 
                     <View style={styles.divider} />
                     <Text style={styles.sectionTitle}>Details</Text>
-                    <Text style={styles.fullDescription}>{translatedDesc.full || displayPoi.fullDescriptionVi}</Text>
+                    {/* 👈 SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ DÀI POI */}
+                    <Text style={styles.fullDescription}>
+                      {translationDict[displayPoi.fullDescriptionVi] || displayPoi.fullDescriptionVi}
+                    </Text>
 
                     {displayPoi.shopkeepers && displayPoi.shopkeepers.length > 0 && (
                       <>
@@ -406,7 +465,6 @@ export default function MapScreen() {
   );
 }
 
-// (Giữ nguyên styles ở dưới)
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
@@ -416,10 +474,14 @@ const styles = StyleSheet.create({
   headerPillTextSmall: { fontSize: 12, fontWeight: "700", color: "#374151" },
   deniedBanner: { position: "absolute", left: 16, right: 16, zIndex: 20, backgroundColor: "#FEF2F2", padding: 12, borderRadius: 16 },
   deniedText: { color: "#DC2626", fontWeight: "600" },
+  
+  // Style cho loading dịch
+  preTranslateOverlay: { position: "absolute", alignSelf: "center", flexDirection: "row", backgroundColor: "rgba(17, 24, 39, 0.9)", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, zIndex: 50, alignItems: "center" },
 
   bottomStack: { position: "absolute", left: 16, right: 16, zIndex: 20, gap: 10 },
   simBarContent: { gap: 8, paddingBottom: 4 },
   simChip: { backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.orangeBorder },
+  simChipActive: { borderColor: colors.accent, backgroundColor: colors.softAccent },
   simChipText: { fontSize: 12, fontWeight: "700", color: colors.accentDark },
 
   card: { backgroundColor: colors.surface, borderRadius: 24, overflow: "hidden", elevation: 8, borderWidth: 1, borderColor: colors.orangeBorder },

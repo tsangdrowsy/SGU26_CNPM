@@ -5,6 +5,28 @@ import { PlusCircle, Image as ImageIcon, MapPin, Edit, LogOut, X, Star } from "l
 
 const API_BASE = "http://localhost:3000";
 
+
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("admin_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem("admin_token");
+      window.location.href = "/admin/login";
+    }
+    return Promise.reject(error);
+  }
+);
 export default function AdminPage() {
     const navigate = useNavigate();
     const adminName = localStorage.getItem("admin_name") || "Admin";

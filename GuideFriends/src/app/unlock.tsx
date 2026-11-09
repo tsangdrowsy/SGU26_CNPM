@@ -133,7 +133,7 @@ export default function UnlockScreen() {
               onPress={() => setMode("clerk")}
             >
               <Text style={[styles.tabText, mode === "clerk" && styles.tabTextActive]}>
-                Nhập mã (Clerk)
+                Input Code (Clerk)
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -141,7 +141,7 @@ export default function UnlockScreen() {
               onPress={() => setMode("vnpay")}
             >
               <Text style={[styles.tabText, mode === "vnpay" && styles.tabTextActive]}>
-                Thanh toán VNPAY
+              VNPAY Transaction
               </Text>
             </TouchableOpacity>
           </View>

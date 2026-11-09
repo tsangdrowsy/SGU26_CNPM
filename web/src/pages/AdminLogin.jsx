@@ -17,7 +17,8 @@ export default function AdminLogin() {
       const res = await axios.post(`${API_BASE}/api/admin/login`, { username, password });
       if (res.data.success) {
         // Lưu trạng thái đăng nhập vào localStorage
-        localStorage.setItem("admin_token", "true");
+        // localStorage.setItem("admin_token", "true");
+        localStorage.setItem("admin_token", res.data.token);
         localStorage.setItem("admin_name", res.data.adminName);
         navigate("/admin");
       }

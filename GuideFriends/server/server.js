@@ -7,6 +7,8 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import jwt from "jsonwebtoken";
+
 import { translateTextGemini, chatWithContext } from "./aiService.js";
 import { VNPay, ignoreLogger, ProductCode, VnpLocale } from 'vnpay';
 
@@ -41,6 +43,24 @@ app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 app.use(express.static(path.join(process.cwd(), "public")));
+
+const authenticateAdmin = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Unauthorized: No token provided" });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: "Forbidden: Admin access only" });
+    }
+    req.admin = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Unauthorized: Invalid token" });
+  }
+};
 
 // ---------- CẤU HÌNH DATABASE ----------
 const pool = new sql.ConnectionPool({
@@ -252,7 +272,6 @@ app.post("/api/auth/validate-token", async (req, res) => {
       return res.status(401).json({ error: "Mã không hợp lệ hoặc đã hết hạn." });
     }
 
-    // 👈 BỎ COMMENT DÒNG NÀY: Đổi trạng thái thành đã dùng (1)
     await pool.request()
       .input("token", sql.VarChar(36), token)
       .query(`UPDATE UnlockTokens SET IsUsed = 1 WHERE Token = @token`);
@@ -279,13 +298,22 @@ app.post("/api/admin/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.PasswordHash);
     if (!isMatch) return res.status(401).json({ error: "Sai tài khoản hoặc mật khẩu" });
 
-    res.json({ success: true, message: "Đăng nhập thành công", adminName: admin.FullName });
-  } catch (err) {
+    //  TẠO JWT TOKEN (Hạn 1 ngày)
+    const token = jwt.sign(
+      { id: admin.Id, username: admin.Username, role: 'admin' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.json({ success: true, message: "Đăng nhập thành công", adminName: admin.FullName, token });
+  }
+  catch (err) {
+    console.error("[POST /api/admin/login]", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/api/admin/stats", async (req, res) => {
+app.get("/api/admin/stats", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const totalTokens = (await pool.request().query("SELECT COUNT(*) as count FROM UnlockTokens")).recordset[0].count;
@@ -298,7 +326,7 @@ app.get("/api/admin/stats", async (req, res) => {
   }
 });
 
-app.get("/api/admin/tokens", async (req, res) => {
+app.get("/api/admin/tokens", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().query(`
@@ -314,7 +342,7 @@ app.get("/api/admin/tokens", async (req, res) => {
   }
 });
 
-app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
+app.post("/api/admin/pois", authenticateAdmin, upload.array("images", 10), async (req, res) => {
   try {
     await connectPool();
     const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters, mainImage, galleryImages } = req.body;
@@ -353,7 +381,7 @@ app.post("/api/admin/pois", upload.array("images", 10), async (req, res) => {
   }
 });
 
-app.put("/api/admin/pois/:id", upload.array("images", 10), async (req, res) => {
+app.put("/api/admin/pois/:id", authenticateAdmin, upload.array("images", 10), async (req, res) => {
   const { id } = req.params;
   const { name, shortDescriptionVi, fullDescriptionVi, latitude, longitude, radiusMeters, mainImage, galleryImages } = req.body;
 
@@ -398,7 +426,7 @@ app.put("/api/admin/pois/:id", upload.array("images", 10), async (req, res) => {
 // ==========================================
 // 5. SHOPKEEPER ROUTES
 // ==========================================
-app.get("/api/admin/shopkeepers", async (req, res) => {
+app.get("/api/admin/shopkeepers", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().query("SELECT * FROM Shopkeepers ORDER BY CreatedAt DESC");
@@ -408,7 +436,7 @@ app.get("/api/admin/shopkeepers", async (req, res) => {
   }
 });
 
-app.get("/api/admin/shopkeeper/pending", async (req, res) => {
+app.get("/api/admin/shopkeeper/pending", authenticateAdmin,async (req, res) => {
   try {
     await connectPool();
     const result = await pool.request().query("SELECT * FROM Shopkeepers WHERE Status IN ('pending', 'pending_vnpay') ORDER BY CreatedAt DESC");
@@ -418,7 +446,7 @@ app.get("/api/admin/shopkeeper/pending", async (req, res) => {
   }
 });
 
-app.post("/api/admin/shopkeeper/approve/:id", async (req, res) => {
+app.post("/api/admin/shopkeeper/approve/:id", authenticateAdmin, async (req, res) => {
   try {
     await connectPool();
     const shop = (await pool.request().input("id", sql.VarChar(50), req.params.id).query("SELECT ClaimCode FROM Shopkeepers WHERE Id = @id")).recordset[0];
@@ -431,7 +459,7 @@ app.post("/api/admin/shopkeeper/approve/:id", async (req, res) => {
   }
 });
 
-app.get("/api/shopkeeper/verify/:claimCode", async (req, res) => {
+app.get("/api/shopkeeper/verify/:claimCode",async (req, res) => {
   try {
     await connectPool();
     const cleanClaimCode = req.params.claimCode.trim();
@@ -448,7 +476,7 @@ app.get("/api/shopkeeper/verify/:claimCode", async (req, res) => {
   }
 });
 
-// 👈 SỬA LỖI TẠI ĐÂY: Cập nhật route cập nhật của Shopkeeper
+//  SỬA LỖI TẠI ĐÂY: Cập nhật route cập nhật của Shopkeeper
 app.put("/api/shopkeeper/update/:claimCode", upload.array("images", 10), async (req, res) => {
   const { claimCode } = req.params;
   const { name, descriptionVi, openingHours, phone, poiId, mainImage, galleryImages } = req.body;
@@ -490,7 +518,7 @@ app.put("/api/shopkeeper/update/:claimCode", upload.array("images", 10), async (
   }
 });
 
-// 👈 SỬA LỖI TẠI ĐÂY: Cập nhật route đăng ký của Shopkeeper
+//  SỬA LỖI TẠI ĐÂY: Cập nhật route đăng ký của Shopkeeper
 app.post("/api/shopkeeper/register", upload.array("images", 10), async (req, res) => {
   const { poiId, name, descriptionVi, openingHours, phone, latitude, longitude, paymentMethod } = req.body;
 
@@ -661,7 +689,7 @@ app.get('/api/payment/vnpay-ipn', async (req, res) => {
   }
 });
 
-// 👈 ĐÃ SỬA: Xử lý cả trường hợp thanh toán bị hủy
+//  ĐÃ SỬA: Xử lý cả trường hợp thanh toán bị hủy
 app.get('/api/payment/vnpay-return', async (req, res) => {
   const responseCode = req.query.vnp_ResponseCode;
   const txnRef = req.query.vnp_TxnRef;
@@ -706,7 +734,7 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
     await connectPool();
     const result = await pool.request().input("token", sql.VarChar(36), req.params.token).query("SELECT IsUsed FROM UnlockTokens WHERE Token = @token");
 
-    // 👈 Nếu token bị xóa (do hủy thanh toán), trả về 404
+    //  Nếu token bị xóa (do hủy thanh toán), trả về 404
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: "Token không tồn tại hoặc đã bị hủy." });
     }
@@ -718,5 +746,24 @@ app.get("/api/payment/check-status/:token", async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+// ---------- CATCH-ALL REACT ROUTER ----------
+app.get('*', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+});
+
+// ---------- START SERVER ----------
+app.listen(process.env.PORT ?? 3000, async () => {
+  console.log(`[api] listening on http://0.0.0.0:${process.env.PORT ?? 3000}`);
+  try {
+    await connectPool();
+    console.log("[db] connection verified on startup");
+  } catch (e) {
+    console.error("[db] FAILED on startup:", e.message);
   }
 });

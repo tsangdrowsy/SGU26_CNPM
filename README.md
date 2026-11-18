@@ -45,6 +45,12 @@ Dự án áp dụng chiến lược **"On-the-fly Translation & TTS"** (Dịch v
 
 ```text
 GuideFriends/
+├── server/               # Mã nguồn Backend (Node.js Express)
+│   ├── uploads/          # Thư mục chứa ảnh upload từ người dùng
+│   ├── server.js         # File chạy chính của API
+│   └── aiService.js      # Logic gọi Gemini API
+|
+|
 ├── src/                  # Mã nguồn ứng dụng Mobile (React Native/Expo)
 │   ├── app/              # Các màn hình (Expo Router)
 │   ├── api/              # Cấu hình Axios/Fetch gọi API
@@ -53,13 +59,6 @@ GuideFriends/
 │   ├── services/         # AI Translation, TTS, Chatbot Service
 │   |── types/            # Định nghĩa TypeScript Interfaces
     └──sql/sql1.sql   # Script khởi tạo Database SQL Server
-
-
-
-├── server/               # Mã nguồn Backend (Node.js Express)
-│   ├── uploads/          # Thư mục chứa ảnh upload từ người dùng
-│   ├── server.js         # File chạy chính của API
-│   └── aiService.js      # Logic gọi Gemini API
 
  
 web/                  # Mã nguồn Web Portal (React Vite)

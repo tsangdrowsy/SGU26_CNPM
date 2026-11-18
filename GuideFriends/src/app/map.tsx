@@ -394,6 +394,7 @@ export default function MapScreen() {
                 <Text style={styles.simChipText}>{poi.name.split(" (")[0]}</Text>
               </TouchableOpacity>
             ))}
+           
           </ScrollView>
 
           <Animated.View style={[styles.card, { height: animatedHeight }]}>

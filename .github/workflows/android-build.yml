@@ -26,11 +26,13 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: 27.10.0
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@27.10.0
+
+      - name: Login to Expo
+        run: eas login --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build Android (Preview APK)
         run: eas build --platform android --profile preview --non-interactive --no-wait

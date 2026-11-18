@@ -3,8 +3,8 @@ version: '3.8'
 services:
   android-build:
     build:
-      context: ..
-      dockerfile: GuideFriends/Dockerfile.android
+      context: .
+      dockerfile: Dockerfile.android
     image: guidefriends-android:latest
     volumes:
       # Mount output directory for APK/AAB
@@ -17,11 +17,11 @@ services:
       # Required for EAS local builds
       - EXPO_TOKEN=${EXPO_TOKEN}
       # Optional: for release builds with credentials
-      - ANDROID_KEYSTORE_PATH=/app/keystore.jks
-      - ANDROID_KEYSTORE_PASSWORD=${ANDROID_KEYSTORE_PASSWORD}
-      - ANDROID_KEY_ALIAS=${ANDROID_KEY_ALIAS}
-      - ANDROID_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}
+      # - ANDROID_KEYSTORE_PATH=/app/keystore.jks
+      # - ANDROID_KEYSTORE_PASSWORD=${ANDROID_KEYSTORE_PASSWORD}
+      # - ANDROID_KEY_ALIAS=${ANDROID_KEY_ALIAS}
+      # - ANDROID_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}
     # Override command for different build types:
-    # Debug APK (default): docker compose -f GuideFriends/docker-compose.android.yml up
-    # Release AAB: docker compose -f GuideFriends/docker-compose.android.yml run --rm android-build eas build --platform android --profile production --local --output /app/android/app/build/outputs/bundle/release/app-release.aab
-    # Preview APK: docker compose -f GuideFriends/docker-compose.android.yml run --rm android-build eas build --platform android --profile preview --local --output /app/android/app/build/outputs/apk/preview/app-preview.apk
+    # Debug APK (default): docker compose -f docker-compose.android.yml up
+    # Release AAB: docker compose -f docker-compose.android.yml run --rm android-build eas build --platform android --profile production --local --output /app/android/app/build/outputs/bundle/release/app-release.aab
+    # Preview APK: docker compose -f docker-compose.android.yml run --rm android-build eas build --platform android --profile preview --local --output /app/android/app/build/outputs/apk/preview/app-preview.apk

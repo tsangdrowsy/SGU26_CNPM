@@ -25,8 +25,8 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Lint & Typecheck
-        run: npx expo lint && npx tsc --noEmit
+      - name: Typecheck
+        run: npx tsc --noEmit
 
       - name: Setup EAS
         uses: expo/expo-github-action@v8

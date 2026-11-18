@@ -62,6 +62,7 @@ export default function MapScreen() {
   const [locationStatus, setLocationStatus] = useState<"requesting" | "active" | "denied">("requesting");
 
   const [userCoords, setUserCoords] = useState<UserLocation | null>(null);
+  const [realUserCoords, setRealUserCoords] = useState<UserLocation | null>(null);
   const [nearbyPoi, setNearbyPoi] = useState<POI | null>(null);
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
@@ -206,7 +207,13 @@ export default function MapScreen() {
       locationSubscription.current?.remove?.();
       locationSubscription.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 2000 },
-        (pos) => { if (!simModeRef.current) setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 }); }
+        (pos) => {
+          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 };
+          // Always update real GPS coords for distance calculation
+          setRealUserCoords(coords);
+          // Only update userCoords (used for map display) if not in sim mode
+          if (!simModeRef.current) setUserCoords(coords);
+        }
       );
     } catch (e) { setLocationStatus("denied"); }
   }, []);
@@ -243,26 +250,28 @@ export default function MapScreen() {
     }
   }, [currentLanguage, translationDict]);
 
-  //  GEOFENCE MỚI: Chặn giả lập (chỉ chạy khi dùng Real GPS)
+  //  GEOFENCE: dùng Real GPS khi có, fallback userCoords (simulated) để hiển thị nearby
   useEffect(() => {
-    if (!userCoords || pois.length === 0) return;
+    // Priority: real GPS > simulated (for demo/testing)
+    const coordsForGeofence = realUserCoords ?? userCoords;
+    if (!coordsForGeofence || pois.length === 0) return;
 
     const found = pois.find(
       (poi) =>
         getDistanceMeters(
-          userCoords.latitude, userCoords.longitude,
+          coordsForGeofence.latitude, coordsForGeofence.longitude,
           poi.location.latitude, poi.location.longitude
         ) <= poi.radiusMeters + 5
     );
 
     setNearbyPoi(found ?? null);
 
-    // Chỉ auto đọc nếu KHÔNG PHẢI giả lập
+    // Auto TTS chỉ chạy với Real GPS (không phải sim)
     if (found && !simModeRef.current && !visitedRef.current.has(found.id)) {
       markVisited(found.id);
       triggerTTS(found);
     }
-  }, [userCoords, pois, triggerTTS, markVisited]);
+  }, [realUserCoords, userCoords, pois, triggerTTS, markVisited]);
 
   const simulate = useCallback((lat: number, lng: number) => { 
     simModeRef.current = true; 
@@ -275,7 +284,9 @@ export default function MapScreen() {
     setSimMode(false);
     try {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 });
+      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 };
+      setRealUserCoords(coords);
+      setUserCoords(coords);
     } catch (e) {
       console.log("Lỗi lấy GPS thật:", e);
     }
@@ -296,6 +307,7 @@ export default function MapScreen() {
         longitude: pos.coords.longitude,
         accuracy: pos.coords.accuracy ?? 15,
       };
+      setRealUserCoords(newCoords);
       setUserCoords(newCoords);
       setPanToLocation({ latitude: newCoords.latitude, longitude: newCoords.longitude });
     } catch (e) {
@@ -303,7 +315,7 @@ export default function MapScreen() {
     }
   }, []);
 
-  const distance = userCoords && displayPoi ? Math.round(getDistanceMeters(userCoords.latitude, userCoords.longitude, displayPoi.location.latitude, displayPoi.location.longitude)) : null;
+  const distance = realUserCoords && displayPoi ? Math.round(getDistanceMeters(realUserCoords.latitude, realUserCoords.longitude, displayPoi.location.latitude, displayPoi.location.longitude)) : null;
   const isVisited = displayPoi ? visitedIds.includes(displayPoi.id) : false;
 
   const handleListen = () => {

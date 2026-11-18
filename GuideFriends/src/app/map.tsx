@@ -332,7 +332,7 @@ export default function MapScreen() {
           onLocateMe={handleLocateMe}
         />
 
-        {/* 👈 Hiển thị loading khi đang dịch toàn bộ dữ liệu */}
+        {/*  Hiển thị loading khi đang dịch toàn bộ dữ liệu */}
         {isPreTranslating && (
           <View style={[styles.preTranslateOverlay, { top: insets.top + 60 }]}>
             <ActivityIndicator color={colors.accent} size="small" />
@@ -408,7 +408,7 @@ export default function MapScreen() {
               {selectedShop ? (
                 <View>
                   <ImageGallery imageUrls={selectedShop.imageUrls} />
-                  {/* 👈 SỬ DỤNG TỪ ĐIỂN ĐỂ HIỂN THỊ MÔ TẢ QUÁN */}
+                  {/*  SỬ DỤNG TỪ ĐIỂN ĐỂ HIỂN THỊ MÔ TẢ QUÁN */}
                   <Text style={styles.fullDescription}>
                     {translationDict[selectedShop.descriptionVi || ""] || selectedShop.descriptionVi}
                   </Text>
@@ -416,7 +416,7 @@ export default function MapScreen() {
               ) : (
                 displayPoi ? (
                   <>
-                    {/* 👈 SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ NGẮN POI */}
+                    {/*  SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ NGẮN POI */}
                     <Text style={styles.cardDescription}>
                       {translationDict[displayPoi.shortDescriptionVi] || displayPoi.shortDescriptionVi}
                     </Text>
@@ -427,7 +427,7 @@ export default function MapScreen() {
 
                     <View style={styles.divider} />
                     <Text style={styles.sectionTitle}>Details</Text>
-                    {/* 👈 SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ DÀI POI */}
+                    {/*  SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ DÀI POI */}
                     <Text style={styles.fullDescription}>
                       {translationDict[displayPoi.fullDescriptionVi] || displayPoi.fullDescriptionVi}
                     </Text>

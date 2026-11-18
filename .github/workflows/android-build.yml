@@ -1,0 +1,42 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'GuideFriends/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: EAS Build Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./GuideFriends
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: GuideFriends/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Lint & Typecheck
+        run: npx expo lint && npx tsc --noEmit
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android (Preview APK)
+        run: eas build --platform android --profile preview --non-interactive --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

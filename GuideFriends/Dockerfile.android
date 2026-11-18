@@ -1,0 +1,57 @@
+# Android build Dockerfile for GuideFriends (Expo + EAS)
+# Usage:
+#   docker build -f Dockerfile.android -t guidefriends-android .
+#   docker run --rm -v $(pwd)/GuideFriends:/app -v $(pwd)/android-output:/app/android/app/build/outputs guidefriends-android
+
+FROM node:20-bookworm-slim
+
+# Install Android SDK dependencies
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV ANDROID_HOME=/opt/android-sdk
+ENV PATH=${PATH}:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${ANDROID_SDK_ROOT}/build-tools/34.0.0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-17-jdk-headless \
+    unzip \
+    wget \
+    git \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Android SDK command line tools
+RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    mv ${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools ${ANDROID_SDK_ROOT}/cmdline-tools/latest && \
+    rm /tmp/cmdline-tools.zip
+
+# Accept licenses and install required packages
+RUN yes | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --licenses && \
+    ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager \
+    "platforms;android-34" \
+    "build-tools;34.0.0" \
+    "platform-tools" \
+    "ndk;26.1.10909125"
+
+# Install Gradle (EAS uses Gradle wrapper, but good to have)
+ENV GRADLE_VERSION=8.5
+RUN wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle.zip && \
+    unzip -q /tmp/gradle.zip -d /opt && \
+    ln -s /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle && \
+    rm /tmp/gradle.zip
+
+# Install EAS CLI globally
+RUN npm install -g eas-cli@latest
+
+WORKDIR /app
+
+# Copy package files first for caching
+COPY GuideFriends/package*.json ./
+RUN npm ci
+
+# Copy the rest of the app
+COPY GuideFriends/ ./
+
+# Default command: build Android APK (debug)
+# For release AAB: CMD ["eas", "build", "--platform", "android", "--profile", "production", "--local", "--output", "/app/android/app/build/outputs/bundle/release/app-release.aab"]
+CMD ["eas", "build", "--platform", "android", "--profile", "preview", "--local", "--output", "/app/android/app/build/outputs/apk/preview/app-preview.apk"]

@@ -1,6 +1,7 @@
 // src/features/map/MapCanvas.web.tsx
 import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { MaterialIcons } from '@expo/vector-icons';
 import { POI, Shopkeeper } from "../../types/poi"; // 👈 Thêm Shopkeeper
 import { UserLocation } from "./types";
 
@@ -154,6 +155,7 @@ export default function MapCanvas({
   onShopSelected, // 👈 Nhận prop
   onMapTap,
   panToLocation,
+  onLocateMe,
 }: MapCanvasProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestUserRef = useRef<UserLocation | null>(userLocation);
@@ -238,6 +240,9 @@ export default function MapCanvas({
         <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(-1)} activeOpacity={0.8}>
           <Text style={styles.zoomBtnText}>−</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.zoomBtn, styles.locateBtn]} onPress={onLocateMe} activeOpacity={0.8}>
+          <MaterialIcons name="my-location" size={22} color="#374151" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -247,4 +252,6 @@ const styles = StyleSheet.create({
   zoomWrap: { position: "absolute", right: 12, top: "38%", gap: 8, zIndex: 10 },
   zoomBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E5E7EB", boxShadow: "0 2px 6px rgba(0,0,0,0.15)" },
   zoomBtnText: { fontSize: 22, fontWeight: "700", color: "#374151" },
+  locateBtn: { marginTop: 8, backgroundColor: "#F3F4F6" },
+  locateBtnText: { fontSize: 18, color: "#374151" },
 });

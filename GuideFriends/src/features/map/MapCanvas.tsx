@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { MaterialIcons } from '@expo/vector-icons'; // 👈 Icon library
 import { POI, Shopkeeper } from "../../types/poi"; // 👈 Thêm Shopkeeper
 import { UserLocation } from "./types";
 
@@ -119,7 +120,7 @@ function buildHtml(pois: POI[], center: { latitude: number; longitude: number })
 }
 
 export default function MapCanvas({
-  pois, center, userLocation, onReady, onPoiSelected, onShopSelected, onMapTap, panToLocation,
+  pois, center, userLocation, onReady, onPoiSelected, onShopSelected, onMapTap, panToLocation, onLocateMe,
 }: MapCanvasProps) {
   const webRef = useRef<WebView>(null);
   const initialCenter = useRef(center);
@@ -172,7 +173,7 @@ export default function MapCanvas({
       <View style={styles.zoomWrap}>
         <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(1)}><Text style={styles.zoomBtnText}>+</Text></TouchableOpacity>
         <TouchableOpacity style={styles.zoomBtn} onPress={() => zoomBy(-1)}><Text style={styles.zoomBtnText}>−</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.zoomBtn, styles.locateBtn]} onPress={locateMe}><Text style={styles.locateBtnText}>📍</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.zoomBtn, styles.locateBtn]} onPress={onLocateMe}><MaterialIcons name="my-location" size={22} color="#374151" /></TouchableOpacity>
       </View>
     </View>
   );

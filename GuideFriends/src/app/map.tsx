@@ -63,6 +63,7 @@ export default function MapScreen() {
 
   const [userCoords, setUserCoords] = useState<UserLocation | null>(null);
   const [realUserCoords, setRealUserCoords] = useState<UserLocation | null>(null);
+  const [exitConfirm, setExitConfirm] = useState(false);
   const [nearbyPoi, setNearbyPoi] = useState<POI | null>(null);
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
@@ -357,13 +358,34 @@ export default function MapScreen() {
         )}
 
         <View style={[styles.header, { top: insets.top + 8 }]}>
-          <TouchableOpacity onPress={async () => { await AsyncStorage.removeItem("access_token"); router.replace("/"); }} style={styles.headerPill}>
+          <TouchableOpacity onPress={() => setExitConfirm(true)} style={styles.headerPill}>
             <Text style={styles.headerPillText}>Exit</Text>
           </TouchableOpacity>
           <View style={styles.headerPill}>
             <Text style={styles.headerPillTextSmall}>{locationStatus === "active" ? "GPS Active" : "Waiting..."}</Text>
           </View>
         </View>
+
+        {exitConfirm && (
+          <View style={styles.exitOverlay}>
+            <View style={styles.exitCard}>
+              <Text style={styles.exitTitle}>Exit guide?</Text>
+              <Text style={styles.exitDesc}>You will need an activation code to re-enter.</Text>
+              <View style={styles.exitActions}>
+                <TouchableOpacity style={styles.exitBtnCancel} onPress={() => setExitConfirm(false)}>
+                  <Text style={styles.exitBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.exitBtnExit} onPress={async () => {
+                  setExitConfirm(false);
+                  await AsyncStorage.removeItem("access_token");
+                  router.replace("/");
+                }}>
+                  <Text style={styles.exitBtnTextExit}>Exit</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         <View style={[styles.bottomStack, { bottom: insets.bottom }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.simBarContent}>
@@ -484,6 +506,78 @@ const styles = StyleSheet.create({
   
   // Style cho loading dịch
   preTranslateOverlay: { position: "absolute", alignSelf: "center", flexDirection: "row", backgroundColor: "rgba(17, 24, 39, 0.9)", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, zIndex: 50, alignItems: "center" },
+
+  // Exit confirmation modal
+  exitOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+  },
+  exitCard: {
+    backgroundColor: colors.surface,
+    padding: 24,
+    borderRadius: 20,
+    width: "85%",
+    maxWidth: 340,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  exitTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.textPrimary,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  exitDesc: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 20,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  exitActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  exitBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    marginRight: 8,
+  },
+  exitBtnExit: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  exitBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
+  exitBtnTextExit: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "white",
+  },
 
   bottomStack: { position: "absolute", left: 16, right: 16, zIndex: 20, gap: 10 },
   simBarContent: { gap: 8, paddingBottom: 4 },

@@ -15,7 +15,7 @@ import { colors } from "../theme/colors";
 import { getDistanceMeters } from "../features/map/geo";
 import MapCanvas from "../features/map/MapCanvas";
 import { UserLocation } from "../features/map/types";
-import { translateBatch } from "../services/translationService"; // 👈 Chỉ cần translateBatch
+import { translateBatch } from "../services/translationService"; //  Chỉ cần translateBatch
 import { speak, stopSpeaking } from "../services/ttsService";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -69,7 +69,7 @@ export default function MapScreen() {
   const [ttsState, setTtsState] = useState<"idle" | "preparing" | "speaking">("idle");
   const [currentLanguage, setCurrentLanguage] = useState<LanguageCode>("en");
 
-  // 👈 TỪ ĐIỂN DỊCH THUẬT (Lưu tất cả text đã dịch)
+  //  TỪ ĐIỂN DỊCH THUẬT (Lưu tất cả text đã dịch)
   const [translationDict, setTranslationDict] = useState<Record<string, string>>({});
   const [isPreTranslating, setIsPreTranslating] = useState(false);
 
@@ -109,7 +109,7 @@ export default function MapScreen() {
     else snapTo(COLLAPSED_HEIGHT);
   }, [selectedPoi, selectedShop]);
 
-  // 👈 EFFECT 1: TẢI DỮ LIỆU POI TỪ CACHE/API
+  //  EFFECT 1: TẢI DỮ LIỆU POI TỪ CACHE/API
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -221,7 +221,7 @@ export default function MapScreen() {
     visitedRef.current.add(id); setVisitedIds(Array.from(visitedRef.current));
   }, []);
 
-  // 👈 HÀM TTS MỚI: Đọc text từ Từ điển, chỉ gọi speak 1 lần
+  //  HÀM TTS MỚI: Đọc text từ Từ điển, chỉ gọi speak 1 lần
   const triggerTTS = useCallback(async (poi: POI) => {
     await stopSpeaking();
     setTtsState("preparing");
@@ -243,7 +243,7 @@ export default function MapScreen() {
     }
   }, [currentLanguage, translationDict]);
 
-  // 👈 GEOFENCE MỚI: Chặn giả lập (chỉ chạy khi dùng Real GPS)
+  //  GEOFENCE MỚI: Chặn giả lập (chỉ chạy khi dùng Real GPS)
   useEffect(() => {
     if (!userCoords || pois.length === 0) return;
 
@@ -332,7 +332,7 @@ export default function MapScreen() {
           onLocateMe={handleLocateMe}
         />
 
-        {/* 👈 Hiển thị loading khi đang dịch toàn bộ dữ liệu */}
+        {/*  Hiển thị loading khi đang dịch toàn bộ dữ liệu */}
         {isPreTranslating && (
           <View style={[styles.preTranslateOverlay, { top: insets.top + 60 }]}>
             <ActivityIndicator color={colors.accent} size="small" />
@@ -408,7 +408,7 @@ export default function MapScreen() {
               {selectedShop ? (
                 <View>
                   <ImageGallery imageUrls={selectedShop.imageUrls} />
-                  {/* 👈 SỬ DỤNG TỪ ĐIỂN ĐỂ HIỂN THỊ MÔ TẢ QUÁN */}
+                  {/*  SỬ DỤNG TỪ ĐIỂN ĐỂ HIỂN THỊ MÔ TẢ QUÁN */}
                   <Text style={styles.fullDescription}>
                     {translationDict[selectedShop.descriptionVi || ""] || selectedShop.descriptionVi}
                   </Text>
@@ -416,7 +416,7 @@ export default function MapScreen() {
               ) : (
                 displayPoi ? (
                   <>
-                    {/* 👈 SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ NGẮN POI */}
+                    {/*  SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ NGẮN POI */}
                     <Text style={styles.cardDescription}>
                       {translationDict[displayPoi.shortDescriptionVi] || displayPoi.shortDescriptionVi}
                     </Text>
@@ -427,7 +427,7 @@ export default function MapScreen() {
 
                     <View style={styles.divider} />
                     <Text style={styles.sectionTitle}>Details</Text>
-                    {/* 👈 SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ DÀI POI */}
+                    {/*  SỬ DỤNG TỪ ĐIỂN CHO MÔ TẢ DÀI POI */}
                     <Text style={styles.fullDescription}>
                       {translationDict[displayPoi.fullDescriptionVi] || displayPoi.fullDescriptionVi}
                     </Text>

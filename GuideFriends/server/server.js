@@ -111,7 +111,7 @@ function rowToPoi(r) {
     },
   };
 }
-
+//Hàm generate 6 chuỗi token
 function generate6CharToken() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let result = '';

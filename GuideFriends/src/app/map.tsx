@@ -62,6 +62,8 @@ export default function MapScreen() {
   const [locationStatus, setLocationStatus] = useState<"requesting" | "active" | "denied">("requesting");
 
   const [userCoords, setUserCoords] = useState<UserLocation | null>(null);
+  const [realUserCoords, setRealUserCoords] = useState<UserLocation | null>(null);
+  const [exitConfirm, setExitConfirm] = useState(false);
   const [nearbyPoi, setNearbyPoi] = useState<POI | null>(null);
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
@@ -206,7 +208,11 @@ export default function MapScreen() {
       locationSubscription.current?.remove?.();
       locationSubscription.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 2000 },
-        (pos) => { if (!simModeRef.current) setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 }); }
+        (pos) => {
+          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 };
+          setRealUserCoords(coords);
+          if (!simModeRef.current) setUserCoords(coords);
+        }
       );
     } catch (e) { setLocationStatus("denied"); }
   }, []);
@@ -275,7 +281,9 @@ export default function MapScreen() {
     setSimMode(false);
     try {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 });
+      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 };
+      setRealUserCoords(coords);
+      setUserCoords(coords);
     } catch (e) {
       console.log("Lỗi lấy GPS thật:", e);
     }
@@ -297,13 +305,16 @@ export default function MapScreen() {
         accuracy: pos.coords.accuracy ?? 15,
       };
       setUserCoords(newCoords);
+      setRealUserCoords(newCoords);
       setPanToLocation({ latitude: newCoords.latitude, longitude: newCoords.longitude });
     } catch (e) {
       console.log("Locate me failed:", e);
     }
   }, []);
 
-  const distance = userCoords && displayPoi ? Math.round(getDistanceMeters(userCoords.latitude, userCoords.longitude, displayPoi.location.latitude, displayPoi.location.longitude)) : null;
+  const displayCoords = realUserCoords ?? userCoords;
+  const distanceMeters = displayCoords && displayPoi ? Math.round(getDistanceMeters(displayCoords.latitude, displayCoords.longitude, displayPoi.location.latitude, displayPoi.location.longitude)) : null;
+  const distance = distanceMeters ? (distanceMeters >= 999 ? `${(distanceMeters / 1000).toFixed(1)}km` : `${distanceMeters}m`) : null;
   const isVisited = displayPoi ? visitedIds.includes(displayPoi.id) : false;
 
   const handleListen = () => {
@@ -347,13 +358,34 @@ export default function MapScreen() {
         )}
 
         <View style={[styles.header, { top: insets.top + 8 }]}>
-          <TouchableOpacity onPress={async () => { await AsyncStorage.removeItem("access_token"); router.replace("/"); }} style={styles.headerPill}>
+          <TouchableOpacity onPress={() => setExitConfirm(true)} style={styles.headerPill}>
             <Text style={styles.headerPillText}>Exit</Text>
           </TouchableOpacity>
           <View style={styles.headerPill}>
             <Text style={styles.headerPillTextSmall}>{locationStatus === "active" ? "GPS Active" : "Waiting..."}</Text>
           </View>
         </View>
+
+        {exitConfirm && (
+          <View style={styles.exitOverlay}>
+            <View style={styles.exitCard}>
+              <Text style={styles.exitTitle}>Exit guide?</Text>
+              <Text style={styles.exitDesc}>You will need an activation code to re-enter.</Text>
+              <View style={styles.exitActions}>
+                <TouchableOpacity style={styles.exitBtnCancel} onPress={() => setExitConfirm(false)}>
+                  <Text style={styles.exitBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.exitBtnExit} onPress={async () => {
+                  setExitConfirm(false);
+                  await AsyncStorage.removeItem("access_token");
+                  router.replace("/");
+                }}>
+                  <Text style={styles.exitBtnTextExit}>Exit</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         <View style={[styles.bottomStack, { bottom: insets.bottom }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.simBarContent}>
@@ -419,7 +451,7 @@ export default function MapScreen() {
                       {translationDict[displayPoi.shortDescriptionVi] || displayPoi.shortDescriptionVi}
                     </Text>
                     
-                    {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}m</Text>}
+                    {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}</Text>}
 
                     <ImageGallery imageUrls={displayPoi.imageUrls} />
 
@@ -475,6 +507,78 @@ const styles = StyleSheet.create({
   
   // Style cho loading dịch
   preTranslateOverlay: { position: "absolute", alignSelf: "center", flexDirection: "row", backgroundColor: "rgba(17, 24, 39, 0.9)", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, zIndex: 50, alignItems: "center" },
+
+  // Exit confirmation modal
+  exitOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+  },
+  exitCard: {
+    backgroundColor: colors.surface,
+    padding: 24,
+    borderRadius: 20,
+    width: "85%",
+    maxWidth: 340,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  exitTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.textPrimary,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  exitDesc: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 20,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  exitActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  exitBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    marginRight: 8,
+  },
+  exitBtnExit: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  exitBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
+  exitBtnTextExit: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "white",
+  },
 
   bottomStack: { position: "absolute", left: 16, right: 16, zIndex: 20, gap: 10 },
   simBarContent: { gap: 8, paddingBottom: 4 },

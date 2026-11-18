@@ -15,7 +15,8 @@ export default function ShopkeeperEditPage() {
   const [pois, setPois] = useState([]);
 
   const [formData, setFormData] = useState({
-    name: "", descriptionVi: "", openingHours: "", phone: "", poiId: ""
+    name: "", descriptionVi: "", openingHours: "", phone: "", poiId: "",
+    latitude: "", longitude: ""
   });
   const [startHour, setStartHour] = useState("08");
   const [endHour, setEndHour] = useState("21");
@@ -53,7 +54,9 @@ export default function ShopkeeperEditPage() {
           descriptionVi: shop.DescriptionVi || "",
           openingHours: shop.OpeningHours || "08:00 - 21:00",
           phone: shop.Phone || "",
-          poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : "")
+          poiId: shop.PoiId || (poisRes.data.pois.length > 0 ? poisRes.data.pois[0].id : ""),
+          latitude: shop.Latitude || "",
+          longitude: shop.Longitude || ""
         });
 
         // Parse ảnh cũ và ảnh chính
@@ -155,6 +158,32 @@ export default function ShopkeeperEditPage() {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Tọa độ */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Vĩ độ (Latitude)</label>
+              <input
+                type="number"
+                step="any"
+                value={formData.latitude}
+                onChange={(e) => setFormData({...formData, latitude: e.target.value})}
+                placeholder="16.12345"
+                className="w-full border p-3 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Kinh độ (Longitude)</label>
+              <input
+                type="number"
+                step="any"
+                value={formData.longitude}
+                onChange={(e) => setFormData({...formData, longitude: e.target.value})}
+                placeholder="108.23456"
+                className="w-full border p-3 rounded-lg"
+              />
+            </div>
           </div>
 
           <div>

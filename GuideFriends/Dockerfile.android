@@ -1,7 +1,7 @@
 # Android build Dockerfile for GuideFriends (Expo + EAS)
-# Usage:
+# Usage (from GuideFriends/ directory):
 #   docker build -f Dockerfile.android -t guidefriends-android .
-#   docker run --rm -v $(pwd)/GuideFriends:/app -v $(pwd)/android-output:/app/android/app/build/outputs guidefriends-android
+#   docker run --rm -v $(pwd):/app -v $(pwd)/android-output:/app/android/app/build/outputs guidefriends-android
 
 FROM node:20-bookworm-slim
 
@@ -46,11 +46,11 @@ RUN npm install -g eas-cli@latest
 WORKDIR /app
 
 # Copy package files first for caching
-COPY GuideFriends/package*.json ./
+COPY package*.json ./
 RUN npm ci
 
 # Copy the rest of the app
-COPY GuideFriends/ ./
+COPY . .
 
 # Default command: build Android APK (debug)
 # For release AAB: CMD ["eas", "build", "--platform", "android", "--profile", "production", "--local", "--output", "/app/android/app/build/outputs/bundle/release/app-release.aab"]

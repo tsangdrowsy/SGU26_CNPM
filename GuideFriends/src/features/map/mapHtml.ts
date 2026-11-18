@@ -1,6 +1,6 @@
 // src/features/map/mapHtml.ts
 
-import { POI } from "../../data/mockPois";
+import { POI } from "../../types/poi";
 
 export function buildMapHtml(
   pois: POI[],

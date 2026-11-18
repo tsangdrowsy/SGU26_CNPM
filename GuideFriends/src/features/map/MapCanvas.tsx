@@ -113,8 +113,7 @@ export default function MapCanvas({
   pois, center, userLocation, onReady, onPoiSelected, onShopSelected, onMapTap, panToLocation, onLocateMe,
 }: MapCanvasProps) {
   const webRef = useRef<WebView>(null);
-  const initialCenter = useRef(center);
-  const html = useMemo(() => buildHtml(pois, initialCenter.current), [pois]);
+  const html = useMemo(() => buildHtml(pois, center), [pois, center]);
 
   useEffect(() => {
     if (!userLocation) return;

@@ -209,9 +209,7 @@ export default function MapScreen() {
         { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 2000 },
         (pos) => {
           const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 };
-          // Always update real GPS coords for distance calculation
           setRealUserCoords(coords);
-          // Only update userCoords (used for map display) if not in sim mode
           if (!simModeRef.current) setUserCoords(coords);
         }
       );
@@ -252,7 +250,6 @@ export default function MapScreen() {
 
   //  GEOFENCE: dùng Real GPS khi có, fallback userCoords (simulated) để hiển thị nearby
   useEffect(() => {
-    // Priority: real GPS > simulated (for demo/testing)
     const coordsForGeofence = realUserCoords ?? userCoords;
     if (!coordsForGeofence || pois.length === 0) return;
 
@@ -374,9 +371,6 @@ export default function MapScreen() {
                 <Text style={styles.simChipText}>{poi.name.split(" (")[0]}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={[styles.simChip, !simMode && styles.simChipActive]} onPress={resumeRealGps}>
-              <Text style={styles.simChipText}>Real GPS</Text>
-            </TouchableOpacity>
           </ScrollView>
 
           <Animated.View style={[styles.card, { height: animatedHeight }]}>

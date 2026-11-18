@@ -62,6 +62,7 @@ export default function MapScreen() {
   const [locationStatus, setLocationStatus] = useState<"requesting" | "active" | "denied">("requesting");
 
   const [userCoords, setUserCoords] = useState<UserLocation | null>(null);
+  const [realUserCoords, setRealUserCoords] = useState<UserLocation | null>(null);
   const [nearbyPoi, setNearbyPoi] = useState<POI | null>(null);
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
@@ -206,7 +207,11 @@ export default function MapScreen() {
       locationSubscription.current?.remove?.();
       locationSubscription.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 2000 },
-        (pos) => { if (!simModeRef.current) setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 }); }
+        (pos) => {
+          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 };
+          setRealUserCoords(coords);
+          if (!simModeRef.current) setUserCoords(coords);
+        }
       );
     } catch (e) { setLocationStatus("denied"); }
   }, []);
@@ -275,7 +280,9 @@ export default function MapScreen() {
     setSimMode(false);
     try {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      setUserCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 });
+      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 15 };
+      setRealUserCoords(coords);
+      setUserCoords(coords);
     } catch (e) {
       console.log("Lỗi lấy GPS thật:", e);
     }
@@ -297,13 +304,16 @@ export default function MapScreen() {
         accuracy: pos.coords.accuracy ?? 15,
       };
       setUserCoords(newCoords);
+      setRealUserCoords(newCoords);
       setPanToLocation({ latitude: newCoords.latitude, longitude: newCoords.longitude });
     } catch (e) {
       console.log("Locate me failed:", e);
     }
   }, []);
 
-  const distance = userCoords && displayPoi ? Math.round(getDistanceMeters(userCoords.latitude, userCoords.longitude, displayPoi.location.latitude, displayPoi.location.longitude)) : null;
+  const displayCoords = realUserCoords ?? userCoords;
+  const distanceMeters = displayCoords && displayPoi ? Math.round(getDistanceMeters(displayCoords.latitude, displayCoords.longitude, displayPoi.location.latitude, displayPoi.location.longitude)) : null;
+  const distance = distanceMeters ? (distanceMeters >= 999 ? `${(distanceMeters / 1000).toFixed(1)}km` : `${distanceMeters}m`) : null;
   const isVisited = displayPoi ? visitedIds.includes(displayPoi.id) : false;
 
   const handleListen = () => {
@@ -418,7 +428,7 @@ export default function MapScreen() {
                       {translationDict[displayPoi.shortDescriptionVi] || displayPoi.shortDescriptionVi}
                     </Text>
                     
-                    {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}m</Text>}
+                    {distance !== null && <Text style={styles.cardDistance}>Distance: {distance}</Text>}
 
                     <ImageGallery imageUrls={displayPoi.imageUrls} />
 

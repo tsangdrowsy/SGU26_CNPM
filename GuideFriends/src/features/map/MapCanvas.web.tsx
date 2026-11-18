@@ -13,6 +13,7 @@ type MapCanvasProps = {
   onShopSelected: (shop: Shopkeeper) => void; // 👈 Thêm prop
   onMapTap: () => void;
   panToLocation?: { latitude: number; longitude: number } | null;
+  onLocateMe: () => void;
 };
 
 function buildHtml(
